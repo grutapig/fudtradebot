@@ -39,3 +39,39 @@ type AnalysisResult struct {
 	Analysis      string
 	Timestamp     time.Time
 }
+
+// PositionSide represents the direction of a futures position
+type PositionSide string
+
+const (
+	PositionSideLong  PositionSide = "LONG"
+	PositionSideShort PositionSide = "SHORT"
+	PositionSideBoth  PositionSide = "BOTH"
+)
+
+// Position represents an open futures position
+type Position struct {
+	Symbol       string
+	Side         PositionSide
+	Leverage     int
+	EntryPrice   float64
+	Amount       float64
+	UnrealizedPL float64
+	Timestamp    time.Time
+}
+
+// OrderSide represents buy or sell
+type OrderSide string
+
+const (
+	OrderBuy  OrderSide = "BUY"
+	OrderSell OrderSide = "SELL"
+)
+
+// OrderType represents the type of order
+type OrderType string
+
+const (
+	OrderTypeLimit  OrderType = "LIMIT"
+	OrderTypeMarket OrderType = "MARKET"
+)
