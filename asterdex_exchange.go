@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -95,6 +96,25 @@ func NewAsterDexExchange(apiKey, secretKey string) AsterDexExchange {
 			Timeout: 10 * time.Second,
 		},
 	}
+}
+
+func NewAsterDexExchangeWithProxy(apiKey, secretKey, proxyDSN string) (AsterDexExchange, error) {
+	transport := &http.Transport{}
+	if proxyDSN != "" {
+		proxyURL, err := url.Parse(proxyDSN)
+		if err != nil {
+			return AsterDexExchange{}, fmt.Errorf("new asterdex exchange proxy dsn error: %s", err)
+		}
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+	return AsterDexExchange{
+		apiKey:    apiKey,
+		secretKey: secretKey,
+		client: &http.Client{
+			Transport: transport,
+			Timeout:   10 * time.Second,
+		},
+	}, nil
 }
 
 // generateSignature creates HMAC SHA256 signature for signed endpoints

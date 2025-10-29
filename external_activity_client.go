@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 type ActivityDataPoint struct {
@@ -29,8 +30,28 @@ type ExternalActivityClient struct {
 func NewExternalActivityClient(baseURL string) ExternalActivityClient {
 	return ExternalActivityClient{
 		baseURL: baseURL,
-		client:  http.Client{},
+		client: http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
+}
+
+func NewExternalActivityClientWithProxy(baseURL string, proxyDSN string) (ExternalActivityClient, error) {
+	transport := &http.Transport{}
+	if proxyDSN != "" {
+		proxyURL, err := url.Parse(proxyDSN)
+		if err != nil {
+			return ExternalActivityClient{}, fmt.Errorf("new activity client proxy dsn error: %s", err)
+		}
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+	return ExternalActivityClient{
+		baseURL: baseURL,
+		client: http.Client{
+			Transport: transport,
+			Timeout:   30 * time.Second,
+		},
+	}, nil
 }
 
 func (c ExternalActivityClient) GetCommunityActivity(communityID string, timestampFrom, timestampTo int64, period string) ([]ActivityDataPoint, error) {
@@ -163,4 +184,40 @@ func calculateAverage(data []ActivityDataPoint) float64 {
 	}
 
 	return float64(sum) / float64(len(data))
+}
+
+func (c ExternalActivityClient) GetRecentTweets(communityID string, limit int) ([]CommunityTweet, error) {
+	endpoint := fmt.Sprintf("%s/api/external/community/%s/tweets", c.baseURL, communityID)
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	query := u.Query()
+	if limit > 0 {
+		query.Set("limit", strconv.Itoa(limit))
+	}
+	u.RawQuery = query.Encode()
+
+	resp, err := c.client.Get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result TweetsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	if result.Status == "error" {
+		return nil, fmt.Errorf("%s: %s", result.Message, result.Error)
+	}
+
+	return result.Data, nil
 }

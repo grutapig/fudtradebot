@@ -101,29 +101,6 @@ func NewClaudeClient(apiKey string, proxyDSN string, defaultModel string) (api *
 	return api, nil
 }
 
-func NewClaudeClientWithLimits(apiKey string, proxyDSN string, defaultModel string, requestsPerMinute, inputTPM, outputTPM int) (api *ClaudeApi, err error) {
-	transport := &http.Transport{}
-	if proxyDSN != "" {
-		proxyURL, err := url.Parse(proxyDSN)
-		if err != nil {
-			return nil, fmt.Errorf("new gruta client proxy dsn error: %s", err)
-		}
-		transport.Proxy = http.ProxyURL(proxyURL)
-	}
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   10 * time.Minute,
-	}
-	api = &ClaudeApi{
-		apiKey:      apiKey,
-		client:      client,
-		model:       defaultModel,
-		maxTokens:   DEFAULT_MAX_TOKENS,
-		temperature: DEFAULT_TEMPERATURE,
-	}
-	return api, nil
-}
-
 func (c *ClaudeApi) SendMessage(claudeMessages ClaudeMessages, systemMessage string) (*ClaudeMessageResponse, error) {
 	log.Printf("🤖 [GRUTA_API] Preparing request - Model: %s, Messages: %d, MaxTokens: %d", c.model, len(claudeMessages), min(c.maxTokens, MAX_TOKENS))
 	log.Printf("🤖 [GRUTA_API] System message length: %d characters", len(systemMessage))

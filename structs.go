@@ -96,3 +96,26 @@ type TradingState struct {
 	CurrentPosition PositionSide
 	OpenedAt        time.Time
 }
+
+type CommunityTweet struct {
+	ID        string    `json:"id"`
+	Date      time.Time `json:"date"`
+	Text      string    `json:"text"`
+	Sentiment int       `json:"sentiment"`
+	IsFud     bool      `json:"is_fud"`
+}
+type TweetsResponse struct {
+	Status  string           `json:"status"`
+	Data    []CommunityTweet `json:"data,omitempty"`
+	Message string           `json:"message,omitempty"`
+	Error   string           `json:"error,omitempty"`
+}
+
+type ClaudeSentimentResponse struct {
+	OverallSentiment int      `json:"overall_sentiment"`
+	SentimentTrend   string   `json:"sentiment_trend"`
+	FudLevel         int      `json:"fud_level"`
+	Confidence       float64  `json:"confidence"`
+	KeyThemes        []string `json:"key_themes"`
+	Recommendation   string   `json:"recommendation"`
+}
