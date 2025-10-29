@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -59,6 +58,20 @@ type AsterDexOrderResponse struct {
 	UpdateTime int64  `json:"updateTime"`
 }
 
+type AsterDexKline struct {
+	OpenTime       int64
+	Open           string
+	High           string
+	Low            string
+	Close          string
+	Volume         string
+	CloseTime      int64
+	QuoteVolume    string
+	NumberOfTrades int
+	TakerBuyBase   string
+	TakerBuyQuote  string
+}
+
 type AsterDexIndexKline struct {
 	OpenTime            int64  `json:"openTime"`
 	Open                string `json:"open"`
@@ -74,8 +87,8 @@ type AsterDexIndexKline struct {
 	Ignore              string `json:"ignore"`
 }
 
-func NewAsterDexExchange(apiKey, secretKey string) *AsterDexExchange {
-	return &AsterDexExchange{
+func NewAsterDexExchange(apiKey, secretKey string) AsterDexExchange {
+	return AsterDexExchange{
 		apiKey:    apiKey,
 		secretKey: secretKey,
 		client: &http.Client{
@@ -92,7 +105,7 @@ func (e *AsterDexExchange) generateSignature(params string) string {
 }
 
 // doRequest performs HTTP request with authentication
-func (e *AsterDexExchange) doRequest(ctx context.Context, method, endpoint, params string, signed bool) ([]byte, error) {
+func (e *AsterDexExchange) doRequest(method, endpoint, params string, signed bool) ([]byte, error) {
 	url := AsterDexBaseURL + endpoint
 
 	if signed {
@@ -115,16 +128,16 @@ func (e *AsterDexExchange) doRequest(ctx context.Context, method, endpoint, para
 
 	if method == "POST" || method == "PUT" || method == "DELETE" {
 		if params != "" {
-			req, err = http.NewRequestWithContext(ctx, method, url, bytes.NewBufferString(params))
+			req, err = http.NewRequest(method, url, bytes.NewBufferString(params))
 		} else {
-			req, err = http.NewRequestWithContext(ctx, method, url, nil)
+			req, err = http.NewRequest(method, url, nil)
 		}
 		if err != nil {
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	} else {
-		req, err = http.NewRequestWithContext(ctx, method, url, nil)
+		req, err = http.NewRequest(method, url, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -153,8 +166,8 @@ func (e *AsterDexExchange) doRequest(ctx context.Context, method, endpoint, para
 }
 
 // GetPositionMode gets current position mode (Hedge or One-way)
-func (e *AsterDexExchange) GetPositionMode(ctx context.Context) (bool, error) {
-	body, err := e.doRequest(ctx, "GET", "/fapi/v1/positionSide/dual", "", true)
+func (e *AsterDexExchange) GetPositionMode() (bool, error) {
+	body, err := e.doRequest("GET", "/fapi/v1/positionSide/dual", "", true)
 	if err != nil {
 		return false, err
 	}
@@ -170,35 +183,35 @@ func (e *AsterDexExchange) GetPositionMode(ctx context.Context) (bool, error) {
 }
 
 // SetPositionMode sets position mode (Hedge or One-way)
-func (e *AsterDexExchange) SetPositionMode(ctx context.Context, hedgeMode bool) error {
+func (e *AsterDexExchange) SetPositionMode(hedgeMode bool) error {
 	params := fmt.Sprintf("dualSidePosition=%t", hedgeMode)
-	_, err := e.doRequest(ctx, "POST", "/fapi/v1/positionSide/dual", params, true)
+	_, err := e.doRequest("POST", "/fapi/v1/positionSide/dual", params, true)
 	return err
 }
 
 // SetLeverage sets leverage for a symbol
-func (e *AsterDexExchange) SetLeverage(ctx context.Context, symbol string, leverage int) error {
+func (e *AsterDexExchange) SetLeverage(symbol string, leverage int) error {
 	params := fmt.Sprintf("symbol=%s&leverage=%d", symbol, leverage)
-	_, err := e.doRequest(ctx, "POST", "/fapi/v1/leverage", params, true)
+	_, err := e.doRequest("POST", "/fapi/v1/leverage", params, true)
 	return err
 }
 
-func (e *AsterDexExchange) OpenPosition(ctx context.Context, symbol string, side PositionSide, leverage int, quantity float64) (*Position, error) {
+func (e *AsterDexExchange) OpenPosition(symbol string, side PositionSide, leverage int, quantity float64) (*Position, error) {
 	// Check and set position mode if needed
-	isHedgeMode, err := e.GetPositionMode(ctx)
+	isHedgeMode, err := e.GetPositionMode()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get position mode: %w", err)
 	}
 
 	// If not in Hedge Mode and we're using LONG/SHORT, enable it
 	if !isHedgeMode && (side == PositionSideLong || side == PositionSideShort) {
-		if err := e.SetPositionMode(ctx, true); err != nil {
+		if err := e.SetPositionMode(true); err != nil {
 			return nil, fmt.Errorf("failed to enable hedge mode: %w", err)
 		}
 	}
 
 	// Set leverage
-	if err := e.SetLeverage(ctx, symbol, leverage); err != nil {
+	if err := e.SetLeverage(symbol, leverage); err != nil {
 		return nil, fmt.Errorf("failed to set leverage: %w", err)
 	}
 
@@ -214,7 +227,7 @@ func (e *AsterDexExchange) OpenPosition(ctx context.Context, symbol string, side
 	params := fmt.Sprintf("symbol=%s&side=%s&type=MARKET&quantity=%.2f&positionSide=%s",
 		symbol, orderSide, quantity, side)
 
-	body, err := e.doRequest(ctx, "POST", "/fapi/v1/order", params, true)
+	body, err := e.doRequest("POST", "/fapi/v1/order", params, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open position: %w", err)
 	}
@@ -225,7 +238,7 @@ func (e *AsterDexExchange) OpenPosition(ctx context.Context, symbol string, side
 	}
 
 	// Get the position info
-	position, err := e.GetPosition(ctx, symbol)
+	position, err := e.GetPosition(symbol)
 	if err != nil {
 		return nil, fmt.Errorf("position opened but failed to fetch details: %w", err)
 	}
@@ -233,9 +246,9 @@ func (e *AsterDexExchange) OpenPosition(ctx context.Context, symbol string, side
 	return position, nil
 }
 
-func (e *AsterDexExchange) ClosePosition(ctx context.Context, symbol string, side PositionSide) error {
+func (e *AsterDexExchange) ClosePosition(symbol string, side PositionSide) error {
 	// Get current position to know the amount
-	position, err := e.GetPosition(ctx, symbol)
+	position, err := e.GetPosition(symbol)
 	if err != nil {
 		return fmt.Errorf("failed to get position: %w", err)
 	}
@@ -256,7 +269,7 @@ func (e *AsterDexExchange) ClosePosition(ctx context.Context, symbol string, sid
 	params := fmt.Sprintf("symbol=%s&side=%s&type=MARKET&positionSide=%s&quantity=%.8f",
 		symbol, orderSide, side, math.Abs(position.Amount))
 	fmt.Println(params)
-	_, err = e.doRequest(ctx, "POST", "/fapi/v1/order", params, true)
+	_, err = e.doRequest("POST", "/fapi/v1/order", params, true)
 	if err != nil {
 		return fmt.Errorf("failed to close position: %w", err)
 	}
@@ -265,9 +278,9 @@ func (e *AsterDexExchange) ClosePosition(ctx context.Context, symbol string, sid
 }
 
 // GetPosition retrieves position information for a specific symbol
-func (e *AsterDexExchange) GetPosition(ctx context.Context, symbol string) (*Position, error) {
+func (e *AsterDexExchange) GetPosition(symbol string) (*Position, error) {
 	params := fmt.Sprintf("symbol=%s", symbol)
-	body, err := e.doRequest(ctx, "GET", "/fapi/v2/positionRisk", params, true)
+	body, err := e.doRequest("GET", "/fapi/v2/positionRisk", params, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get position: %w", err)
 	}
@@ -301,8 +314,8 @@ func (e *AsterDexExchange) GetPosition(ctx context.Context, symbol string) (*Pos
 }
 
 // GetAllPositions retrieves all open positions
-func (e *AsterDexExchange) GetAllPositions(ctx context.Context) ([]*Position, error) {
-	body, err := e.doRequest(ctx, "GET", "/fapi/v2/positionRisk", "", true)
+func (e *AsterDexExchange) GetAllPositions() ([]*Position, error) {
+	body, err := e.doRequest("GET", "/fapi/v2/positionRisk", "", true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positions: %w", err)
 	}
@@ -335,10 +348,9 @@ func (e *AsterDexExchange) GetAllPositions(ctx context.Context) ([]*Position, er
 	return positions, nil
 }
 
-// GetMarkPrice retrieves the current mark price for a symbol
-func (e *AsterDexExchange) GetMarkPrice(ctx context.Context, symbol string) (float64, error) {
+func (e *AsterDexExchange) GetMarkPrice(symbol string) (float64, error) {
 	params := fmt.Sprintf("symbol=%s", symbol)
-	body, err := e.doRequest(ctx, "GET", "/fapi/v1/premiumIndex", params, false)
+	body, err := e.doRequest("GET", "/fapi/v1/premiumIndex", params, false)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get mark price: %w", err)
 	}
@@ -356,9 +368,8 @@ func (e *AsterDexExchange) GetMarkPrice(ctx context.Context, symbol string) (flo
 	return price, nil
 }
 
-// GetBalance retrieves account balance in USDT
-func (e *AsterDexExchange) GetBalance(ctx context.Context) (float64, error) {
-	body, err := e.doRequest(ctx, "GET", "/fapi/v2/balance", "", true)
+func (e *AsterDexExchange) GetBalance() (float64, error) {
+	body, err := e.doRequest("GET", "/fapi/v2/balance", "", true)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get balance: %w", err)
 	}
@@ -382,11 +393,8 @@ func (e *AsterDexExchange) GetBalance(ctx context.Context) (float64, error) {
 	return 0, fmt.Errorf("USDT balance not found")
 }
 
-// GetIndexPriceKlines retrieves kline/candlestick bars for the index price of a pair
-// interval: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M
-// limit: Default 500; max 1500
-func (e *AsterDexExchange) GetIndexPriceKlines(ctx context.Context, pair string, interval string, startTime, endTime int64, limit int) ([][]interface{}, error) {
-	params := fmt.Sprintf("pair=%s&interval=%s", pair, interval)
+func (e *AsterDexExchange) Klines(pair string, interval string, startTime, endTime int64, limit int) ([]AsterDexKline, error) {
+	params := fmt.Sprintf("symbol=%s&interval=%s", pair, interval)
 
 	if startTime > 0 {
 		params += fmt.Sprintf("&startTime=%d", startTime)
@@ -398,14 +406,31 @@ func (e *AsterDexExchange) GetIndexPriceKlines(ctx context.Context, pair string,
 		params += fmt.Sprintf("&limit=%d", limit)
 	}
 
-	body, err := e.doRequest(ctx, "GET", "/fapi/v1/indexPriceKlines", params, false)
+	body, err := e.doRequest("GET", "/fapi/v1/klines", params, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get index price klines: %w", err)
+		return nil, fmt.Errorf("failed to get klines: %w", err)
 	}
 
-	var klines [][]interface{}
-	if err := json.Unmarshal(body, &klines); err != nil {
+	var rawKlines [][]interface{}
+	if err := json.Unmarshal(body, &rawKlines); err != nil {
 		return nil, fmt.Errorf("failed to parse klines: %w", err)
+	}
+
+	klines := make([]AsterDexKline, len(rawKlines))
+	for i, raw := range rawKlines {
+		klines[i] = AsterDexKline{
+			OpenTime:       int64(raw[0].(float64)),
+			Open:           raw[1].(string),
+			High:           raw[2].(string),
+			Low:            raw[3].(string),
+			Close:          raw[4].(string),
+			Volume:         raw[5].(string),
+			CloseTime:      int64(raw[6].(float64)),
+			QuoteVolume:    raw[7].(string),
+			NumberOfTrades: int(raw[8].(float64)),
+			TakerBuyBase:   raw[9].(string),
+			TakerBuyQuote:  raw[10].(string),
+		}
 	}
 
 	return klines, nil

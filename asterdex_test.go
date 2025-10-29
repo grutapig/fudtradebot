@@ -1,7 +1,8 @@
 package main
 
 import (
-	"context"
+	"fmt"
+	"github.com/stretchr/testify/assert"
 	"log"
 	"os"
 	"testing"
@@ -24,7 +25,6 @@ func TestAsterDexPositions(t *testing.T) {
 
 	// Create exchange instance
 	exchange := NewAsterDexExchange(apiKey, secretKey)
-	ctx := context.Background()
 
 	symbol := "SOLUSDT"
 	leverage := 10
@@ -34,14 +34,14 @@ func TestAsterDexPositions(t *testing.T) {
 
 	// 1. Get current balance
 	log.Println("\n1. Checking balance...")
-	balance, err := exchange.GetBalance(ctx)
+	balance, err := exchange.GetBalance()
 	if err != nil {
 		t.Fatalf("Failed to get balance: %v", err)
 	}
 	log.Printf("Available balance: %.2f USDT", balance)
 	// 2. Get mark price
 	log.Println("\n2. Fetching mark price...")
-	markPrice, err := exchange.GetMarkPrice(ctx, symbol)
+	markPrice, err := exchange.GetMarkPrice(symbol)
 	if err != nil {
 		t.Fatalf("Failed to get mark price: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestAsterDexPositions(t *testing.T) {
 
 	// 3. Check existing positions
 	log.Println("\n3. Checking existing positions...")
-	positions, err := exchange.GetAllPositions(ctx)
+	positions, err := exchange.GetAllPositions()
 	if err != nil {
 		t.Fatalf("Failed to get positions: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestAsterDexPositions(t *testing.T) {
 	// 4. Open LONG position
 	log.Println("\n4. Opening LONG position...")
 	side := PositionSideLong
-	position, err := exchange.OpenPosition(ctx, symbol, side, leverage, quantity)
+	position, err := exchange.OpenPosition(symbol, side, leverage, quantity)
 	if err != nil {
 		t.Fatalf("Failed to open LONG position: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestAsterDexPositions(t *testing.T) {
 
 	// 5. Check position status
 	log.Println("\n5. Checking position status...")
-	currentPosition, err := exchange.GetPosition(ctx, symbol)
+	currentPosition, err := exchange.GetPosition(symbol)
 	if err != nil {
 		t.Fatalf("Failed to get position: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestAsterDexPositions(t *testing.T) {
 
 	// 7. Verify position is closed
 	log.Println("\n7. Verifying position is closed...")
-	finalPosition, err := exchange.GetPosition(ctx, symbol)
+	finalPosition, err := exchange.GetPosition(symbol)
 	if err != nil {
 		t.Fatalf("Failed to verify position: %v", err)
 	}
@@ -131,7 +131,21 @@ func TestAsterDexExchange_ClosePosition(t *testing.T) {
 
 	// Create exchange instance
 	exchange := NewAsterDexExchange(apiKey, secretKey)
-	ctx := context.Background()
 	time.Sleep(time.Second * 10)
-	exchange.ClosePosition(ctx, "SOLUSDT", PositionSideLong)
+	exchange.ClosePosition("SOLUSDT", PositionSideLong)
+}
+
+func TestAsterDexExchange_GetKlines(t *testing.T) {
+	godotenv.Load()
+	exchange := NewAsterDexExchange(os.Getenv(ENV_DEX_KEY), os.Getenv(ENV_DEX_SECRET))
+	result, err := exchange.Klines("TURTLEUSDT", "4h", time.Now().AddDate(0, -5, 0).UnixMilli(), time.Now().UnixMilli(), 500)
+	assert.NoError(t, err)
+	svg := GenerateCandlestickSVG(result, 800, 600)
+	os.WriteFile("chart.svg", []byte(svg), 0655)
+	cloud := CalculateIchimoku(result)
+	aga := GenerateIchimokuSVG(result, cloud.Data, 800, 600)
+	os.WriteFile("chart.svg", []byte(aga), 0655)
+	fmt.Printf("analyze %+v", cloud.Analysis)
+	action := GetTradingAction(cloud.Analysis, "")
+	fmt.Println("action:", action)
 }

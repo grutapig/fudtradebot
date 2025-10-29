@@ -75,3 +75,24 @@ const (
 	OrderTypeLimit  OrderType = "LIMIT"
 	OrderTypeMarket OrderType = "MARKET"
 )
+
+type TradingAction string
+
+const (
+	TradingActionOpenLong   TradingAction = "OPEN_LONG"
+	TradingActionOpenShort  TradingAction = "OPEN_SHORT"
+	TradingActionCloseLong  TradingAction = "CLOSE_LONG"
+	TradingActionCloseShort TradingAction = "CLOSE_SHORT"
+	TradingActionHold       TradingAction = "HOLD"
+)
+
+type TradingPair struct {
+	CommunityID string
+	Symbol      string
+	Leverage    int
+}
+
+type TradingState struct {
+	CurrentPosition PositionSide
+	OpenedAt        time.Time
+}
