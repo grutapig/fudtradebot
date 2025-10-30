@@ -35,6 +35,7 @@ func main() {
 	grufenderApiURL := os.Getenv(ENV_GRUFENDER_API_URL)
 	proxyDSN := os.Getenv(ENV_PROXY_DSN)
 	claudeAPIKey := os.Getenv(ENV_CLAUDE_API_KEY)
+	claudeMinIntervalMinutes := getEnvAsInt(ENV_CLAUDE_MIN_INTERVAL_MINUTES, 10)
 
 	if apiKey == "" || secretKey == "" {
 		log.Fatalf("%s and %s environment variables must be set", ENV_DEX_KEY, ENV_DEX_SECRET)
@@ -84,29 +85,45 @@ func main() {
 		wg.Add(1)
 		go func(pair TradingPair) {
 			defer wg.Done()
-			runTradingLoop(exchange, activityClient, claudeClient, pair)
+			runTradingLoop(exchange, activityClient, claudeClient, pair, claudeMinIntervalMinutes)
 		}(pair)
 	}
 
 	wg.Wait()
 }
 
-func runTradingLoop(exchange AsterDexExchange, activityClient ExternalActivityClient, claudeClient *claude.ClaudeApi, pair TradingPair) {
+func runTradingLoop(exchange AsterDexExchange, activityClient ExternalActivityClient, claudeClient *claude.ClaudeApi, pair TradingPair, claudeMinIntervalMinutes int) {
 	state := TradingState{
 		CurrentPosition: PositionSideBoth,
 	}
 
 	log.Printf("[%s] Starting trading loop for community %s", pair.Symbol, pair.CommunityID)
 
+	log.Printf("[%s] Restoring position state from exchange...", pair.Symbol)
+	position, err := exchange.GetPosition(pair.Symbol)
+	if err != nil {
+		log.Printf("[%s] Warning: Failed to restore position state: %v", pair.Symbol, err)
+		log.Printf("[%s] Starting with default state (no position)", pair.Symbol)
+	} else if position != nil {
+		state.CurrentPosition = position.Side
+		state.OpenedAt = position.Timestamp
+		log.Printf("[%s] ✓ Restored existing position: %s (opened at %s)",
+			pair.Symbol, position.Side, position.Timestamp.Format("2006-01-02 15:04:05"))
+		log.Printf("[%s]   Entry price: %.6f, Amount: %.6f, P/L: %.2f USDT",
+			pair.Symbol, position.EntryPrice, position.Amount, position.UnrealizedPL)
+	} else {
+		log.Printf("[%s] ✓ No existing position found, starting fresh", pair.Symbol)
+	}
+
 	for {
-		if err := processTradingCycle(exchange, activityClient, claudeClient, pair, &state); err != nil {
+		if err := processTradingCycle(exchange, activityClient, claudeClient, pair, &state, claudeMinIntervalMinutes); err != nil {
 			log.Printf("[%s] Error in trading cycle: %v", pair.Symbol, err)
 		}
 		time.Sleep(time.Second * 60)
 	}
 }
 
-func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActivityClient, claudeClient *claude.ClaudeApi, pair TradingPair, state *TradingState) error {
+func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActivityClient, claudeClient *claude.ClaudeApi, pair TradingPair, state *TradingState, claudeMinIntervalMinutes int) error {
 	log.Printf("\n========== [%s] Starting analysis cycle ==========", pair.Symbol)
 	if state.CurrentPosition != PositionSideBoth {
 		log.Printf("[%s] Current position: %v (opened %v ago)", pair.Symbol, state.CurrentPosition, time.Since(state.OpenedAt).Round(time.Minute))
@@ -156,21 +173,52 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 			ichimokuAnalysis := CalculateIchimoku(klines)
 			signal = MakeTradingDecision(ichimokuAnalysis.Analysis, activityAnalysis, fudActivityAnalysis, state.CurrentPosition)
 		} else {
-			log.Printf("[%s] Analyzing sentiment with Claude (tweets: %d)", pair.Symbol, len(tweets))
-			sentimentAnalysis, err := AnalyzeCommunitysentiment(*claudeClient, tweets, "Проанализируй настроение сообщества на основе последних твитов")
-			if err != nil {
-				log.Printf("[%s] Failed to analyze sentiment: %v", pair.Symbol, err)
-				log.Printf("[%s] Falling back to simple analysis", pair.Symbol)
-				ichimokuAnalysis := CalculateIchimoku(klines)
-				signal = MakeTradingDecision(ichimokuAnalysis.Analysis, activityAnalysis, fudActivityAnalysis, state.CurrentPosition)
+			timeSinceLastAnalysis := time.Since(state.LastClaudeAnalysis)
+			minInterval := time.Duration(claudeMinIntervalMinutes) * time.Minute
+			hasNewTweets := len(tweets) > 0 && (state.LastAnalyzedTweetID == "" || tweets[0].ID != state.LastAnalyzedTweetID)
+
+			shouldAnalyze := state.LastClaudeAnalysis.IsZero() || (timeSinceLastAnalysis >= minInterval && hasNewTweets)
+
+			if !shouldAnalyze {
+				if timeSinceLastAnalysis < minInterval {
+					log.Printf("[%s] Claude analysis skipped: min interval not reached (%.1f/%.0f min)",
+						pair.Symbol, timeSinceLastAnalysis.Minutes(), minInterval.Minutes())
+				} else {
+					log.Printf("[%s] Claude analysis skipped: no new tweets", pair.Symbol)
+				}
+
+				if state.LastSentimentAnalysis.Confidence != 0 {
+					log.Printf("[%s] Using cached sentiment analysis", pair.Symbol)
+					signal = MakeSmartTradingDecision(activityAnalysis, fudActivityAnalysis, state.LastSentimentAnalysis, state.CurrentPosition)
+				} else {
+					log.Printf("[%s] No cached analysis, using simple analysis", pair.Symbol)
+					ichimokuAnalysis := CalculateIchimoku(klines)
+					signal = MakeTradingDecision(ichimokuAnalysis.Analysis, activityAnalysis, fudActivityAnalysis, state.CurrentPosition)
+				}
 			} else {
-				log.Printf("[%s] Claude sentiment analysis:", pair.Symbol)
-				log.Printf("[%s]   Overall sentiment: %d/10", pair.Symbol, sentimentAnalysis.OverallSentiment)
-				log.Printf("[%s]   Sentiment trend: %s", pair.Symbol, sentimentAnalysis.SentimentTrend)
-				log.Printf("[%s]   FUD level: %d/10", pair.Symbol, sentimentAnalysis.FudLevel)
-				log.Printf("[%s]   Confidence: %.2f", pair.Symbol, sentimentAnalysis.Confidence)
-				log.Printf("[%s]   Recommendation: %s", pair.Symbol, sentimentAnalysis.Recommendation)
-				signal = MakeSmartTradingDecision(activityAnalysis, fudActivityAnalysis, sentimentAnalysis, state.CurrentPosition)
+				log.Printf("[%s] Analyzing sentiment with Claude (tweets: %d, new tweets detected)", pair.Symbol, len(tweets))
+				sentimentAnalysis, err := AnalyzeCommunitysentiment(*claudeClient, tweets, "Analyze community sentiment based on recent tweets")
+				if err != nil {
+					log.Printf("[%s] Failed to analyze sentiment: %v", pair.Symbol, err)
+					log.Printf("[%s] Falling back to simple analysis", pair.Symbol)
+					ichimokuAnalysis := CalculateIchimoku(klines)
+					signal = MakeTradingDecision(ichimokuAnalysis.Analysis, activityAnalysis, fudActivityAnalysis, state.CurrentPosition)
+				} else {
+					state.LastClaudeAnalysis = time.Now()
+					state.LastSentimentAnalysis = sentimentAnalysis
+					if len(tweets) > 0 {
+						state.LastAnalyzedTweetID = tweets[0].ID
+					}
+					state.LastTweetsCount = len(tweets)
+
+					log.Printf("[%s] Claude sentiment analysis:", pair.Symbol)
+					log.Printf("[%s]   Overall sentiment: %d/10", pair.Symbol, sentimentAnalysis.OverallSentiment)
+					log.Printf("[%s]   Sentiment trend: %s", pair.Symbol, sentimentAnalysis.SentimentTrend)
+					log.Printf("[%s]   FUD level: %d/10", pair.Symbol, sentimentAnalysis.FudLevel)
+					log.Printf("[%s]   Confidence: %.2f", pair.Symbol, sentimentAnalysis.Confidence)
+					log.Printf("[%s]   Recommendation: %s", pair.Symbol, sentimentAnalysis.Recommendation)
+					signal = MakeSmartTradingDecision(activityAnalysis, fudActivityAnalysis, sentimentAnalysis, state.CurrentPosition)
+				}
 			}
 		}
 	} else {

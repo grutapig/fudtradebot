@@ -94,7 +94,26 @@ func MakeSmartTradingDecision(
 	var action TradingAction
 	var strength SignalStrength
 
-	if longSignals > shortSignals {
+	isPlateauSituation := activityAnalysis.Trend == ActivityTrendPlateau &&
+		fudActivityAnalysis.Trend == ActivityTrendPlateau &&
+		sentimentAnalysis.SentimentTrend == "stable" &&
+		sentimentAnalysis.OverallSentiment >= -2 && sentimentAnalysis.OverallSentiment <= 2
+
+	if isPlateauSituation && currentPosition != PositionSideBoth {
+		if currentPosition == PositionSideLong {
+			action = TradingActionCloseLong
+			strength = SignalStrengthMedium
+			reasons = append(reasons, "Plateau detected - closing LONG position")
+		} else if currentPosition == PositionSideShort {
+			action = TradingActionCloseShort
+			strength = SignalStrengthMedium
+			reasons = append(reasons, "Plateau detected - closing SHORT position")
+		} else {
+			action = TradingActionHold
+			strength = SignalStrengthNone
+			reasons = append(reasons, "No clear direction - HOLD")
+		}
+	} else if longSignals > shortSignals {
 		if currentPosition == PositionSideShort {
 			action = TradingActionCloseShort
 			strength = getStrength(longSignals)

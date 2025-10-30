@@ -131,7 +131,21 @@ func MakeTradingDecision(
 	var action TradingAction
 	var strength SignalStrength
 
-	if longSignals > shortSignals {
+	if longSignals == shortSignals && currentPosition != PositionSideBoth {
+		if currentPosition == PositionSideLong {
+			action = TradingActionCloseLong
+			strength = SignalStrengthMedium
+			reasons = append(reasons, "Plateau detected - closing LONG position")
+		} else if currentPosition == PositionSideShort {
+			action = TradingActionCloseShort
+			strength = SignalStrengthMedium
+			reasons = append(reasons, "Plateau detected - closing SHORT position")
+		} else {
+			action = TradingActionHold
+			strength = SignalStrengthNone
+			reasons = append(reasons, "No clear direction - HOLD")
+		}
+	} else if longSignals > shortSignals {
 		if currentPosition == PositionSideShort {
 			action = TradingActionCloseShort
 			strength = getStrength(longSignals)
