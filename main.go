@@ -14,16 +14,19 @@ var TradingPairs = []TradingPair{
 		CommunityID: "1969807538154811438",
 		Symbol:      "GIGGLEUSDT",
 		Leverage:    1,
+		Quantity:    0.4,
 	},
 	{
 		CommunityID: "1786006467847368871",
 		Symbol:      "TOSHIUSDT",
 		Leverage:    1,
+		Quantity:    80,
 	},
 	{
 		CommunityID: "1938175945476555178",
 		Symbol:      "TURTLEUSDT",
 		Leverage:    1,
+		Quantity:    450,
 	},
 }
 
@@ -245,17 +248,17 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		if elapsed > 24*time.Hour {
 			log.Printf("\n[%s] ⚠️  Position has been open for more than 24 hours (%v)", pair.Symbol, elapsed.Round(time.Minute))
 			log.Printf("[%s] Decision: Force close %v position due to time limit", pair.Symbol, state.CurrentPosition)
-			//if state.CurrentPosition == PositionSideLong {
-			//	if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
-			//		return err
-			//	}
-			//} else if state.CurrentPosition == PositionSideShort {
-			//	if err := exchange.ClosePosition(pair.Symbol, PositionSideShort); err != nil {
-			//		return err
-			//	}
-			//}
+			if state.CurrentPosition == PositionSideLong {
+				if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
+					return err
+				}
+			} else if state.CurrentPosition == PositionSideShort {
+				if err := exchange.ClosePosition(pair.Symbol, PositionSideShort); err != nil {
+					return err
+				}
+			}
 			state.CurrentPosition = PositionSideBoth
-			log.Printf("[%s] ✓ SIMULATED: Position closed (time limit exceeded)", pair.Symbol)
+			log.Printf("[%s] ✓ Position closed (time limit exceeded)", pair.Symbol)
 			return nil
 		}
 	}
@@ -264,87 +267,71 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 
 	switch signal.Action {
 	case TradingActionOpenLong:
-		balance, err := exchange.GetBalance()
-		if err != nil {
-			log.Printf("[%s] ❌ Failed to get balance: %v", pair.Symbol, err)
-			return err
-		}
-
 		price, err := exchange.GetMarkPrice(pair.Symbol)
 		if err != nil {
 			log.Printf("[%s] ❌ Failed to get price: %v", pair.Symbol, err)
 			return err
 		}
 
-		quantity := (balance * float64(pair.Leverage)) / price
 		log.Printf("[%s] Opening LONG position:", pair.Symbol)
-		log.Printf("[%s]   Balance: %.2f USDT", pair.Symbol, balance)
 		log.Printf("[%s]   Entry price: %.6f", pair.Symbol, price)
-		log.Printf("[%s]   Quantity: %.6f (leverage %dx)", pair.Symbol, quantity, pair.Leverage)
-		log.Printf("[%s]   Position value: %.2f USDT", pair.Symbol, quantity*price)
+		log.Printf("[%s]   Quantity: %.6f (leverage %dx)", pair.Symbol, pair.Quantity, pair.Leverage)
+		log.Printf("[%s]   Position value: %.2f USDT", pair.Symbol, pair.Quantity*price)
 
-		//position, err := exchange.OpenPosition(pair.Symbol, PositionSideLong, pair.Leverage, quantity)
-		//if err != nil {
-		//	log.Printf("[%s] ❌ Failed to open LONG: %v", pair.Symbol, err)
-		//	return err
-		//}
+		position, err := exchange.OpenPosition(pair.Symbol, PositionSideLong, pair.Leverage, pair.Quantity)
+		if err != nil {
+			log.Printf("[%s] ❌ Failed to open LONG: %v", pair.Symbol, err)
+			return err
+		}
 
 		state.CurrentPosition = PositionSideLong
 		state.OpenedAt = time.Now()
-		log.Printf("[%s] ✓ SIMULATED: LONG position opened", pair.Symbol)
+		log.Printf("[%s] ✓ LONG position opened (entry: %.6f, amount: %.6f)", pair.Symbol, position.EntryPrice, position.Amount)
 		log.Printf("[%s] State updated to LONG position\n", pair.Symbol)
 
 	case TradingActionOpenShort:
-		balance, err := exchange.GetBalance()
-		if err != nil {
-			log.Printf("[%s] ❌ Failed to get balance: %v", pair.Symbol, err)
-			return err
-		}
-
 		price, err := exchange.GetMarkPrice(pair.Symbol)
 		if err != nil {
 			log.Printf("[%s] ❌ Failed to get price: %v", pair.Symbol, err)
 			return err
 		}
 
-		quantity := (balance * float64(pair.Leverage)) / price
 		log.Printf("[%s] Opening SHORT position:", pair.Symbol)
-		log.Printf("[%s]   Balance: %.2f USDT", pair.Symbol, balance)
 		log.Printf("[%s]   Entry price: %.6f", pair.Symbol, price)
-		log.Printf("[%s]   Quantity: %.6f (leverage %dx)", pair.Symbol, quantity, pair.Leverage)
-		log.Printf("[%s]   Position value: %.2f USDT", pair.Symbol, quantity*price)
+		log.Printf("[%s]   Quantity: %.6f (leverage %dx)", pair.Symbol, pair.Quantity, pair.Leverage)
+		log.Printf("[%s]   Position value: %.2f USDT", pair.Symbol, pair.Quantity*price)
 
-		//position, err := exchange.OpenPosition(pair.Symbol, PositionSideShort, pair.Leverage, quantity)
-		//if err != nil {
-		//	log.Printf("[%s] ❌ Failed to open SHORT: %v", pair.Symbol, err)
-		//	return err
-		//}
+		position, err := exchange.OpenPosition(pair.Symbol, PositionSideShort, pair.Leverage, pair.Quantity)
+		if err != nil {
+			log.Printf("[%s] ❌ Failed to open SHORT: %v", pair.Symbol, err)
+			return err
+		}
 
 		state.CurrentPosition = PositionSideShort
 		state.OpenedAt = time.Now()
-		log.Printf("[%s] ✓ SIMULATED: SHORT position opened", pair.Symbol)
+		log.Printf("[%s] ✓ SHORT position opened (entry: %.6f, amount: %.6f)", pair.Symbol, position.EntryPrice, position.Amount)
 		log.Printf("[%s] State updated to SHORT position\n", pair.Symbol)
 
 	case TradingActionCloseLong:
 		log.Printf("[%s] Closing LONG position:", pair.Symbol)
 		log.Printf("[%s]   Position held for: %v", pair.Symbol, time.Since(state.OpenedAt).Round(time.Minute))
 		log.Printf("[%s]   Reason: Market conditions changed (signal strength: %d)", pair.Symbol, signal.Strength)
-		//if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
-		//	return err
-		//}
+		if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
+			return err
+		}
 		state.CurrentPosition = PositionSideBoth
-		log.Printf("[%s] ✓ SIMULATED: LONG position closed", pair.Symbol)
+		log.Printf("[%s] ✓ LONG position closed", pair.Symbol)
 		log.Printf("[%s] Now in neutral position\n", pair.Symbol)
 
 	case TradingActionCloseShort:
 		log.Printf("[%s] Closing SHORT position:", pair.Symbol)
 		log.Printf("[%s]   Position held for: %v", pair.Symbol, time.Since(state.OpenedAt).Round(time.Minute))
 		log.Printf("[%s]   Reason: Market conditions changed (signal strength: %d)", pair.Symbol, signal.Strength)
-		//if err := exchange.ClosePosition(pair.Symbol, PositionSideShort); err != nil {
-		//	return err
-		//}
+		if err := exchange.ClosePosition(pair.Symbol, PositionSideShort); err != nil {
+			return err
+		}
 		state.CurrentPosition = PositionSideBoth
-		log.Printf("[%s] ✓ SIMULATED: SHORT position closed", pair.Symbol)
+		log.Printf("[%s] ✓ SHORT position closed", pair.Symbol)
 		log.Printf("[%s] Now in neutral position\n", pair.Symbol)
 
 	case TradingActionHold:

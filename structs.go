@@ -90,6 +90,7 @@ type TradingPair struct {
 	CommunityID string
 	Symbol      string
 	Leverage    int
+	Quantity    float64
 }
 
 type TradingState struct {
