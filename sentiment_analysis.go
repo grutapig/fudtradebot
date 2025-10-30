@@ -7,21 +7,39 @@ import (
 )
 
 func AnalyzeCommunitysentiment(claudeClient claude.ClaudeApi, tweets []CommunityTweet, prompt string) (ClaudeSentimentResponse, error) {
-	systemPrompt := `You are analyzing community sentiment based on tweets. Your task is to determine:
-1. Overall sentiment from -10 to +10
-2. Sentiment trend: "improving", "declining", or "stable"
-3. FUD level (fear, uncertainty, doubt) from 0 to 10
+	systemPrompt := `You are analyzing cryptocurrency community sentiment based on recent tweets. 
+
+IMPORTANT CONTEXT:
+- Negative messages are rare and get deleted quickly by moderators
+- Most sentiment will be positive (2-10 range)
+- Focus on SENTIMENT DYNAMICS rather than absolute values
+- Even small drops in positivity can signal trouble
+
+SENTIMENT SCALE (-10 to +10):
+- Above 7: Excellent sentiment, strong bullish signal
+- 2 to 7: Medium/neutral sentiment, need to check trend direction
+- Below 2: Rare, very concerning (bad news or project issues)
+
+Your task:
+1. Overall sentiment from -10 to +10 (expect mostly 2-10 range)
+2. Sentiment trend: "improving", "declining", or "stable" - THIS IS CRITICAL
+   - "declining" = enthusiasm is fading, even if still positive (7→5 is declining)
+   - "improving" = excitement is building
+3. FUD level from 0 to 10 (fear, uncertainty, doubt)
 4. Confidence in analysis from 0.0 to 1.0
 5. Key discussion themes
 6. Recommendation: "bullish", "bearish", or "neutral"
+   - "bullish": sentiment > 7 OR (2-7 AND improving)
+   - "bearish": declining trend OR high FUD (≥6)
+   - "neutral": stable medium sentiment
 
 Response must be STRICTLY in JSON format:
 {
-  "overall_sentiment": -5,
+  "overall_sentiment": 6,
   "sentiment_trend": "declining",
-  "fud_level": 8,
+  "fud_level": 3,
   "confidence": 0.85,
-  "key_themes": ["price drop", "concern about project"],
+  "key_themes": ["price discussion", "less excitement than before"],
   "recommendation": "bearish"
 }`
 

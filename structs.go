@@ -96,10 +96,8 @@ type TradingPair struct {
 type TradingState struct {
 	CurrentPosition       PositionSide
 	OpenedAt              time.Time
-	LastClaudeAnalysis    time.Time
 	LastSentimentAnalysis ClaudeSentimentResponse
 	LastAnalyzedTweetID   string
-	LastTweetsCount       int
 }
 
 type CommunityTweet struct {
