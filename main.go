@@ -14,19 +14,19 @@ var TradingPairs = []TradingPair{
 		CommunityID: "1969807538154811438",
 		Symbol:      "GIGGLEUSDT",
 		Leverage:    1,
-		Quantity:    0.4,
+		Quantity:    0.2,
 	},
 	{
 		CommunityID: "1786006467847368871",
 		Symbol:      "TOSHIUSDT",
 		Leverage:    1,
-		Quantity:    80,
+		Quantity:    22000,
 	},
 	{
 		CommunityID: "1938175945476555178",
 		Symbol:      "TURTLEUSDT",
 		Leverage:    1,
-		Quantity:    450,
+		Quantity:    150,
 	},
 }
 
@@ -238,7 +238,18 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	log.Printf("[%s] Signal strength: %d/10", pair.Symbol, signal.Strength)
 
 	if signal.Strength < SignalStrengthMedium {
-		log.Printf("[%s] ❌ Signal too weak - skipping action", pair.Symbol)
+		log.Printf("[%s] ❌ Signal too weak - closing position if open", pair.Symbol)
+		if state.CurrentPosition == PositionSideLong {
+			if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
+				return err
+			}
+			return nil
+		} else if state.CurrentPosition == PositionSideShort {
+			if err := exchange.ClosePosition(pair.Symbol, PositionSideShort); err != nil {
+				return err
+			}
+			return nil
+		}
 		return nil
 	}
 	log.Printf("[%s] ✓ Signal strong enough to proceed", pair.Symbol)
