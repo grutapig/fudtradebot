@@ -112,6 +112,7 @@ type TradingPair struct {
 type TradingState struct {
 	CurrentPosition       PositionSide
 	OpenedAt              time.Time
+	OpenReason            string
 	LastSentimentAnalysis ClaudeSentimentResponse
 	LastAnalyzedTweetID   string
 	LastFudCheckTime      time.Time

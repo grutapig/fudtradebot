@@ -182,9 +182,23 @@ func handleBalanceHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	records, err := GetBalanceHistory("USDT", 168)
+	if err != nil {
+		http.Error(w, "Failed to get balance history", http.StatusInternalServerError)
+		return
+	}
+
+	history := make([]BalancePoint, len(records))
+	for i, record := range records {
+		history[i] = BalancePoint{
+			Timestamp: record.Timestamp.UnixMilli(),
+			Balance:   record.Balance,
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"history": balanceHistory,
+		"history": history,
 	})
 }
 
@@ -201,16 +215,44 @@ func handlePositionsList(w http.ResponseWriter, r *http.Request) {
 
 	statusFilter := r.URL.Query().Get("status")
 
-	var filtered []PositionRecord
-	for _, pos := range positionsHistory {
-		if statusFilter == "" || pos.Status == statusFilter {
-			filtered = append(filtered, pos)
+	statesMutex.RLock()
+	defer statesMutex.RUnlock()
+
+	positions := []PositionRecord{}
+
+	for symbol, state := range tradingStates {
+		if state.CurrentPosition != PositionSideBoth {
+			snapshot, err := GetLatestPositionSnapshot(symbol)
+			if err != nil || snapshot == nil {
+				continue
+			}
+
+			if statusFilter == "" || statusFilter == "active" {
+				positions = append(positions, PositionRecord{
+					ID:        symbol + "_active",
+					Date:      state.OpenedAt,
+					Symbol:    symbol,
+					Amount:    snapshot.UnrealizedPL,
+					Direction: string(state.CurrentPosition),
+					Reason:    state.OpenReason,
+					Status:    "active",
+					Result:    snapshot.UnrealizedPL,
+				})
+			}
+		}
+	}
+
+	if statusFilter == "" || statusFilter == "closed" {
+		for _, pos := range positionsHistory {
+			if pos.Status == "closed" {
+				positions = append(positions, pos)
+			}
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"positions": filtered,
+		"positions": positions,
 	})
 }
 

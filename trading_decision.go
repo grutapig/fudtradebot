@@ -8,31 +8,39 @@ const (
 	SignalEmpty Signal = "EMPTY"
 )
 
+type TradingDecisionResult struct {
+	Signal Signal
+	Reason string
+}
+
 func MakeTradingDecision(
 	btcIchimoku IchimokuAnalysis,
 	coinIchimoku IchimokuAnalysis,
 	activityAnalysis ActivityAnalysis,
 	fudActivityAnalysis ActivityAnalysis,
 	sentimentAnalysis ClaudeSentimentResponse,
-) Signal {
+) TradingDecisionResult {
 
 	btcSignal := convertIchimokuToSignal(btcIchimoku)
 	coinSignal := convertIchimokuToSignal(coinIchimoku)
 
 	signal := SignalEmpty
+	reason := ""
 
 	if btcSignal == SignalEmpty && coinSignal != SignalEmpty {
 		signal = coinSignal
+		reason = "ichimoku"
 	} else if btcSignal != SignalEmpty && coinSignal != SignalEmpty {
 		if btcSignal == coinSignal {
 			signal = coinSignal
+			reason = "ichimoku"
 		} else {
 			signal = SignalEmpty
 		}
 	}
 
 	if signal == SignalEmpty {
-		return SignalEmpty
+		return TradingDecisionResult{SignalEmpty, ""}
 	}
 
 	activitySignal := convertActivityToSignal(activityAnalysis)
@@ -40,12 +48,14 @@ func MakeTradingDecision(
 	if activitySignal == SignalEmpty {
 	} else if signal == activitySignal {
 		signal = activitySignal
+		reason = "community"
 	} else {
 		signal = SignalEmpty
+		reason = ""
 	}
 
 	if signal == SignalEmpty {
-		return SignalEmpty
+		return TradingDecisionResult{SignalEmpty, ""}
 	}
 
 	fudSignal := convertFudActivityToSignal(fudActivityAnalysis)
@@ -53,12 +63,14 @@ func MakeTradingDecision(
 	if fudSignal == SignalEmpty {
 	} else if signal == fudSignal {
 		signal = fudSignal
+		reason = "fud"
 	} else {
 		signal = SignalEmpty
+		reason = ""
 	}
 
 	if signal == SignalEmpty {
-		return SignalEmpty
+		return TradingDecisionResult{SignalEmpty, ""}
 	}
 
 	sentimentSignal := convertSentimentToSignal(sentimentAnalysis)
@@ -66,11 +78,13 @@ func MakeTradingDecision(
 	if sentimentSignal == SignalEmpty {
 	} else if signal == sentimentSignal {
 		signal = sentimentSignal
+		reason = "sentiment"
 	} else {
 		signal = SignalEmpty
+		reason = ""
 	}
 
-	return signal
+	return TradingDecisionResult{signal, reason}
 }
 
 func convertIchimokuToSignal(analysis IchimokuAnalysis) Signal {

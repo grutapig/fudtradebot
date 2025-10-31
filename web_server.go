@@ -18,7 +18,7 @@ func StartWebServer() {
 
 	mux.HandleFunc("/api/", corsMiddleware(handleAPIRoutes))
 
-	log.Printf("Starting web server on port %s", port)
+	log.Printf("Starting web server on port http://localhost:%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatalf("Failed to start web server: %v", err)
 	}

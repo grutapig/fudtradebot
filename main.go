@@ -38,12 +38,12 @@ func main() {
 	log.Println("Starting trading bot...")
 	godotenv.Load()
 
-	go StartWebServer()
-
-	if *webOnly {
-		log.Println("Running in WEB-ONLY mode - trading disabled")
-		select {}
+	if err := InitDatabase(); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
 	}
+	log.Println("Database initialized successfully")
+
+	go StartWebServer()
 
 	apiKey := os.Getenv(ENV_DEX_KEY)
 	secretKey := os.Getenv(ENV_DEX_SECRET)
@@ -94,6 +94,13 @@ func main() {
 		claudeClient.SetMaxTokens(4000)
 	}
 
+	go runBalanceCollector(exchange)
+
+	if *webOnly {
+		log.Println("Running in WEB-ONLY mode - trading disabled")
+		select {}
+	}
+
 	var wg sync.WaitGroup
 
 	for _, pair := range TradingPairs {
@@ -107,10 +114,31 @@ func main() {
 	wg.Wait()
 }
 
+func runBalanceCollector(exchange AsterDexExchange) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		balance, err := exchange.GetBalance()
+		if err != nil {
+			log.Printf("Failed to get balance: %v", err)
+		} else {
+			if err := SaveBalance("USDT", balance); err != nil {
+				log.Printf("Failed to save balance: %v", err)
+			} else {
+				log.Printf("Balance saved: %.2f USDT", balance)
+			}
+		}
+		<-ticker.C
+	}
+}
+
 func runTradingLoop(exchange AsterDexExchange, activityClient ExternalActivityClient, claudeClient *claude.ClaudeApi, pair TradingPair, claudeMinIntervalMinutes int) {
 	state := TradingState{
 		CurrentPosition: PositionSideBoth,
 	}
+
+	UpdateTradingState(pair.Symbol, &state)
 
 	log.Printf("[%s] Starting trading loop for community %s", pair.Symbol, pair.CommunityID)
 
@@ -144,6 +172,24 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		log.Printf("[%s] Current position: %v (opened %v ago)", pair.Symbol, state.CurrentPosition, time.Since(state.OpenedAt).Round(time.Minute))
 	} else {
 		log.Printf("[%s] Current position: no active position", pair.Symbol)
+	}
+
+	currentPosition, err := exchange.GetPosition(pair.Symbol)
+	if err != nil {
+		log.Printf("[%s] Failed to get current position: %v", pair.Symbol, err)
+	} else if currentPosition != nil {
+		markPrice, err := exchange.GetMarkPrice(pair.Symbol)
+		if err != nil {
+			log.Printf("[%s] Failed to get mark price: %v", pair.Symbol, err)
+			markPrice = 0
+		}
+
+		if err := SavePositionSnapshot(*currentPosition, markPrice); err != nil {
+			log.Printf("[%s] Failed to save position snapshot: %v", pair.Symbol, err)
+		} else {
+			log.Printf("[%s] Position snapshot saved: P/L %.2f USDT, Mark Price %.6f",
+				pair.Symbol, currentPosition.UnrealizedPL, markPrice)
+		}
 	}
 
 	now := time.Now()
@@ -276,10 +322,10 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		}
 	}
 
-	signal := MakeTradingDecision(btcIchimoku.Analysis, coinIchimoku.Analysis, activityAnalysis, fudActivityAnalysis, sentiment)
-	log.Printf("\n[%s] ===== DECISION: %s =====", pair.Symbol, signal)
+	decision := MakeTradingDecision(btcIchimoku.Analysis, coinIchimoku.Analysis, activityAnalysis, fudActivityAnalysis, sentiment)
+	log.Printf("\n[%s] ===== DECISION: %s (reason: %s) =====", pair.Symbol, decision.Signal, decision.Reason)
 
-	if signal == SignalEmpty {
+	if decision.Signal == SignalEmpty {
 		if state.CurrentPosition != PositionSideBoth {
 			log.Printf("[%s] No signal - closing existing position", pair.Symbol)
 			if state.CurrentPosition == PositionSideLong {
@@ -298,13 +344,14 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		} else {
 			log.Printf("[%s] No signal - no action", pair.Symbol)
 		}
+		state.OpenReason = ""
 		return nil
 	}
 
 	desiredPosition := PositionSideBoth
-	if signal == SignalLong {
+	if decision.Signal == SignalLong {
 		desiredPosition = PositionSideLong
-	} else if signal == SignalShort {
+	} else if decision.Signal == SignalShort {
 		desiredPosition = PositionSideShort
 	}
 
@@ -320,6 +367,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 			return err
 		}
 		state.CurrentPosition = PositionSideBoth
+		state.OpenReason = ""
 	}
 
 	log.Printf("[%s] Opening %s position", pair.Symbol, desiredPosition)
@@ -331,7 +379,8 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 
 	state.CurrentPosition = desiredPosition
 	state.OpenedAt = time.Now()
-	log.Printf("[%s] Position opened: %s (entry: %.6f, amount: %.6f)", pair.Symbol, desiredPosition, position.EntryPrice, position.Amount)
+	state.OpenReason = decision.Reason
+	log.Printf("[%s] Position opened: %s (entry: %.6f, amount: %.6f, reason: %s)", pair.Symbol, desiredPosition, position.EntryPrice, position.Amount, decision.Reason)
 
 	return nil
 }

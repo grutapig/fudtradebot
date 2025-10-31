@@ -64,16 +64,31 @@ If NO attack detected, return:
 		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to marshal tweets: %w", err)
 	}
 
-	userPrompt := fmt.Sprintf("Analyze these %d recent messages for coordinated FUD attacks:\n\n%s", len(tweets), string(tweetsJSON))
+	userMessage := fmt.Sprintf("Analyze these %d recent messages for coordinated FUD attacks:\n\n%s", len(tweets), string(tweetsJSON))
 
-	response, err := claudeClient.GetCompletion(systemPrompt, userPrompt)
+	messages := claude.ClaudeMessages{
+		{
+			Role:    claude.ROLE_USER,
+			Content: userMessage,
+		},
+		{
+			Role:    claude.ROLE_ASSISTANT,
+			Content: "{",
+		},
+	}
+
+	response, err := claudeClient.SendMessage(messages, systemPrompt)
 	if err != nil {
-		return ClaudeFudAttackResponse{}, fmt.Errorf("claude API error: %w", err)
+		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to send message to Claude: %w", err)
+	}
+
+	if len(response.Content) == 0 {
+		return ClaudeFudAttackResponse{}, fmt.Errorf("empty response from Claude")
 	}
 
 	var result ClaudeFudAttackResponse
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to parse response: %w, response: %s", err, response)
+	if err := json.Unmarshal([]byte("{"+response.Content[0].Text), &result); err != nil {
+		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to parse Claude response: %w, response: %s", err, response.Content[0].Text)
 	}
 
 	return result, nil
