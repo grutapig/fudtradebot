@@ -163,25 +163,115 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		return err
 	}
 
-	_, err = exchange.Klines("BTCUSDT", "1h", 0, 0, 7*24)
+	btcKlines, err := exchange.Klines("BTCUSDT", "1h", 0, 0, 52)
 	if err != nil {
-		log.Printf("[%s] Failed to get price data: %v", pair.Symbol, err)
+		log.Printf("[%s] Failed to get BTC price data: %v", pair.Symbol, err)
 		return err
 	}
-	_, err = exchange.Klines(pair.Symbol, "1h", 0, 0, 7*24)
+	coinKlines, err := exchange.Klines(pair.Symbol, "1h", 0, 0, 52)
 	if err != nil {
-		log.Printf("[%s] Failed to get price data: %v", pair.Symbol, err)
+		log.Printf("[%s] Failed to get coin price data: %v", pair.Symbol, err)
 		return err
 	}
 	log.Printf("[%s] Market data collected successfully", pair.Symbol)
 
 	log.Printf("\n[%s] ===== ANALYSIS RESULTS =====", pair.Symbol)
 
+	btcIchimoku := CalculateIchimoku(btcKlines)
+	log.Printf("[%s] BTC Ichimoku: %s", pair.Symbol, btcIchimoku.Analysis.Signal)
+
+	coinIchimoku := CalculateIchimoku(coinKlines)
+	log.Printf("[%s] Coin Ichimoku: %s", pair.Symbol, coinIchimoku.Analysis.Signal)
+
 	activityAnalysis := AnalyzeActivityTrend(activityData)
-	log.Printf("[%s] Community activity trend: %v", pair.Symbol, activityAnalysis)
+	log.Printf("[%s] Community activity trend: %v", pair.Symbol, activityAnalysis.Trend)
 
 	fudActivityAnalysis := AnalyzeFudActivityTrend(fudActivityData)
-	log.Printf("[%s] FUD activity trend: %v", pair.Symbol, fudActivityAnalysis)
+	log.Printf("[%s] FUD activity trend: %v", pair.Symbol, fudActivityAnalysis.Trend)
+
+	sentiment := ClaudeSentimentResponse{}
+	if claudeClient != nil {
+		tweets, err := activityClient.GetRecentTweets(pair.CommunityID, 50)
+		if err != nil {
+			log.Printf("[%s] Failed to fetch tweets: %v", pair.Symbol, err)
+		} else if len(tweets) > 0 {
+			hasNewTweets := state.LastAnalyzedTweetID == "" || tweets[0].ID != state.LastAnalyzedTweetID
+			if hasNewTweets {
+				log.Printf("[%s] Analyzing %d tweets with Claude...", pair.Symbol, len(tweets))
+				sentimentAnalysis, err := AnalyzeCommunitysentiment(*claudeClient, tweets, "Analyze community sentiment")
+				if err != nil {
+					log.Printf("[%s] Claude analysis failed: %v", pair.Symbol, err)
+					if state.LastSentimentAnalysis.Confidence != 0 {
+						sentiment = state.LastSentimentAnalysis
+					}
+				} else {
+					log.Printf("[%s] Sentiment: %d/10, Trend: %s", pair.Symbol, sentimentAnalysis.OverallSentiment, sentimentAnalysis.SentimentTrend)
+					sentiment = sentimentAnalysis
+					state.LastSentimentAnalysis = sentimentAnalysis
+					state.LastAnalyzedTweetID = tweets[0].ID
+				}
+			} else {
+				sentiment = state.LastSentimentAnalysis
+			}
+		}
+	}
+
+	signal := MakeTradingDecision(btcIchimoku.Analysis, coinIchimoku.Analysis, activityAnalysis, fudActivityAnalysis, sentiment)
+	log.Printf("\n[%s] ===== DECISION: %s =====", pair.Symbol, signal)
+
+	if signal == SignalEmpty {
+		if state.CurrentPosition != PositionSideBoth {
+			log.Printf("[%s] No signal - closing existing position", pair.Symbol)
+			if state.CurrentPosition == PositionSideLong {
+				if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
+					log.Printf("[%s] Failed to close LONG: %v", pair.Symbol, err)
+					return err
+				}
+			} else if state.CurrentPosition == PositionSideShort {
+				if err := exchange.ClosePosition(pair.Symbol, PositionSideShort); err != nil {
+					log.Printf("[%s] Failed to close SHORT: %v", pair.Symbol, err)
+					return err
+				}
+			}
+			state.CurrentPosition = PositionSideBoth
+			log.Printf("[%s] Position closed", pair.Symbol)
+		} else {
+			log.Printf("[%s] No signal - no action", pair.Symbol)
+		}
+		return nil
+	}
+
+	desiredPosition := PositionSideBoth
+	if signal == SignalLong {
+		desiredPosition = PositionSideLong
+	} else if signal == SignalShort {
+		desiredPosition = PositionSideShort
+	}
+
+	if state.CurrentPosition == desiredPosition {
+		log.Printf("[%s] Position already matches signal - holding", pair.Symbol)
+		return nil
+	}
+
+	if state.CurrentPosition != PositionSideBoth {
+		log.Printf("[%s] Closing existing %s position", pair.Symbol, state.CurrentPosition)
+		if err := exchange.ClosePosition(pair.Symbol, state.CurrentPosition); err != nil {
+			log.Printf("[%s] Failed to close position: %v", pair.Symbol, err)
+			return err
+		}
+		state.CurrentPosition = PositionSideBoth
+	}
+
+	log.Printf("[%s] Opening %s position", pair.Symbol, desiredPosition)
+	position, err := exchange.OpenPosition(pair.Symbol, desiredPosition, pair.Leverage, pair.Quantity)
+	if err != nil {
+		log.Printf("[%s] Failed to open %s: %v", pair.Symbol, desiredPosition, err)
+		return err
+	}
+
+	state.CurrentPosition = desiredPosition
+	state.OpenedAt = time.Now()
+	log.Printf("[%s] Position opened: %s (entry: %.6f, amount: %.6f)", pair.Symbol, desiredPosition, position.EntryPrice, position.Amount)
 
 	return nil
 }
