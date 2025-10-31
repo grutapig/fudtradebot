@@ -216,6 +216,66 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		}
 	}
 
+	if claudeClient != nil {
+		now := time.Now()
+		timeSinceLastCheck := now.Sub(state.LastFudCheckTime)
+		if timeSinceLastCheck >= 10*time.Minute || state.LastFudCheckTime.IsZero() {
+			tweets, err := activityClient.GetRecentTweets(pair.CommunityID, 200)
+			if err != nil {
+				log.Printf("[%s] Failed to fetch tweets for FUD check: %v", pair.Symbol, err)
+			} else if len(tweets) >= 3 {
+				newMessagesCount := 0
+				if state.LastFudCheckTweetID != "" && len(tweets) > 0 {
+					for i, tweet := range tweets {
+						if tweet.ID == state.LastFudCheckTweetID {
+							newMessagesCount = i
+							break
+						}
+					}
+					if newMessagesCount == 0 && len(tweets) > 0 && tweets[0].ID != state.LastFudCheckTweetID {
+						newMessagesCount = len(tweets)
+					}
+				} else {
+					newMessagesCount = len(tweets)
+				}
+
+				if newMessagesCount >= 3 {
+					log.Printf("[%s] Checking for coordinated FUD attack (%d new messages)...", pair.Symbol, newMessagesCount)
+					fudAttack, err := AnalyzeFudAttack(*claudeClient, tweets)
+					if err != nil {
+						log.Printf("[%s] FUD attack analysis failed: %v", pair.Symbol, err)
+					} else {
+						log.Printf("\n[%s] ===== FUD ATTACK ANALYSIS =====", pair.Symbol)
+						if fudAttack.HasAttack {
+							log.Printf("[%s] ⚠️  COORDINATED FUD ATTACK DETECTED!", pair.Symbol)
+							log.Printf("[%s]   Confidence: %.0f%%", pair.Symbol, fudAttack.Confidence*100)
+							log.Printf("[%s]   Messages: %d", pair.Symbol, fudAttack.MessageCount)
+							log.Printf("[%s]   FUD Type: %s", pair.Symbol, fudAttack.FudType)
+							log.Printf("[%s]   Theme: %s", pair.Symbol, fudAttack.Theme)
+							log.Printf("[%s]   Started: %d hours ago", pair.Symbol, fudAttack.StartedHoursAgo)
+							log.Printf("[%s]   Participants:", pair.Symbol)
+							for _, p := range fudAttack.Participants {
+								log.Printf("[%s]     - %s (%d messages)", pair.Symbol, p.Username, p.MessageCount)
+							}
+							log.Printf("[%s]   Justification: %s", pair.Symbol, fudAttack.Justification)
+						} else {
+							log.Printf("[%s] ✓ No coordinated FUD attack detected", pair.Symbol)
+							log.Printf("[%s]   Confidence: %.0f%%", pair.Symbol, fudAttack.Confidence*100)
+							log.Printf("[%s]   %s", pair.Symbol, fudAttack.Justification)
+						}
+						log.Printf("[%s] ================================\n", pair.Symbol)
+					}
+					state.LastFudCheckTime = now
+					if len(tweets) > 0 {
+						state.LastFudCheckTweetID = tweets[0].ID
+					}
+				} else {
+					log.Printf("[%s] Skipping FUD check: only %d new messages (need 3+)", pair.Symbol, newMessagesCount)
+				}
+			}
+		}
+	}
+
 	signal := MakeTradingDecision(btcIchimoku.Analysis, coinIchimoku.Analysis, activityAnalysis, fudActivityAnalysis, sentiment)
 	log.Printf("\n[%s] ===== DECISION: %s =====", pair.Symbol, signal)
 

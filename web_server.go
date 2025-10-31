@@ -9,7 +9,7 @@ import (
 func StartWebServer() {
 	port := os.Getenv("WEB_SERVER_PORT")
 	if port == "" {
-		port = "8080"
+		port = "34576"
 	}
 
 	mux := http.NewServeMux()

@@ -114,6 +114,8 @@ type TradingState struct {
 	OpenedAt              time.Time
 	LastSentimentAnalysis ClaudeSentimentResponse
 	LastAnalyzedTweetID   string
+	LastFudCheckTime      time.Time
+	LastFudCheckTweetID   string
 }
 
 type CommunityTweet struct {
@@ -137,4 +139,20 @@ type ClaudeSentimentResponse struct {
 	Confidence       float64  `json:"confidence"`
 	KeyThemes        []string `json:"key_themes"`
 	Recommendation   string   `json:"recommendation"`
+}
+
+type FudAttackParticipant struct {
+	Username     string `json:"username"`
+	MessageCount int    `json:"message_count"`
+}
+
+type ClaudeFudAttackResponse struct {
+	HasAttack       bool                   `json:"has_attack"`
+	Confidence      float64                `json:"confidence"`
+	MessageCount    int                    `json:"message_count"`
+	Participants    []FudAttackParticipant `json:"participants"`
+	FudType         string                 `json:"fud_type"`
+	Theme           string                 `json:"theme"`
+	StartedHoursAgo int                    `json:"started_hours_ago"`
+	Justification   string                 `json:"justification"`
 }
