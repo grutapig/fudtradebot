@@ -9,8 +9,14 @@ const (
 )
 
 type TradingDecisionResult struct {
-	Signal Signal
-	Reason string
+	Signal             Signal
+	Reason             string
+	Explanation        string
+	BTCIchimokuSignal  string
+	CoinIchimokuSignal string
+	ActivitySignal     string
+	FudActivitySignal  string
+	SentimentSignal    string
 }
 
 func MakeTradingDecision(
@@ -24,67 +30,108 @@ func MakeTradingDecision(
 	btcSignal := convertIchimokuToSignal(btcIchimoku)
 	coinSignal := convertIchimokuToSignal(coinIchimoku)
 
+	result := TradingDecisionResult{
+		BTCIchimokuSignal:  string(btcSignal),
+		CoinIchimokuSignal: string(coinSignal),
+	}
+
 	signal := SignalEmpty
 	reason := ""
+	explanation := ""
 
 	if btcSignal == SignalEmpty && coinSignal != SignalEmpty {
 		signal = coinSignal
 		reason = "ichimoku"
+		explanation = "BTC Ichimoku neutral, Coin Ichimoku " + string(coinSignal)
 	} else if btcSignal != SignalEmpty && coinSignal != SignalEmpty {
 		if btcSignal == coinSignal {
 			signal = coinSignal
 			reason = "ichimoku"
+			explanation = "BTC and Coin Ichimoku aligned: " + string(coinSignal)
 		} else {
 			signal = SignalEmpty
+			explanation = "BTC Ichimoku " + string(btcSignal) + " contradicts Coin Ichimoku " + string(coinSignal)
 		}
+	} else {
+		explanation = "Both BTC and Coin Ichimoku neutral"
 	}
 
 	if signal == SignalEmpty {
-		return TradingDecisionResult{SignalEmpty, ""}
+		result.Signal = SignalEmpty
+		result.Reason = ""
+		result.Explanation = explanation
+		result.ActivitySignal = string(convertActivityToSignal(activityAnalysis))
+		result.FudActivitySignal = string(convertFudActivityToSignal(fudActivityAnalysis))
+		result.SentimentSignal = string(convertSentimentToSignal(sentimentAnalysis))
+		return result
 	}
 
 	activitySignal := convertActivityToSignal(activityAnalysis)
+	result.ActivitySignal = string(activitySignal)
 
 	if activitySignal == SignalEmpty {
+		explanation += ". Activity neutral"
 	} else if signal == activitySignal {
 		signal = activitySignal
 		reason = "community"
+		explanation += ". Activity confirms: " + string(activitySignal)
 	} else {
 		signal = SignalEmpty
 		reason = ""
+		explanation += ". Activity " + string(activitySignal) + " contradicts signal"
 	}
 
 	if signal == SignalEmpty {
-		return TradingDecisionResult{SignalEmpty, ""}
+		result.Signal = SignalEmpty
+		result.Reason = ""
+		result.Explanation = explanation
+		result.FudActivitySignal = string(convertFudActivityToSignal(fudActivityAnalysis))
+		result.SentimentSignal = string(convertSentimentToSignal(sentimentAnalysis))
+		return result
 	}
 
 	fudSignal := convertFudActivityToSignal(fudActivityAnalysis)
+	result.FudActivitySignal = string(fudSignal)
 
 	if fudSignal == SignalEmpty {
+		explanation += ". FUD activity neutral"
 	} else if signal == fudSignal {
 		signal = fudSignal
 		reason = "fud"
+		explanation += ". FUD activity confirms: " + string(fudSignal)
 	} else {
 		signal = SignalEmpty
 		reason = ""
+		explanation += ". FUD activity " + string(fudSignal) + " contradicts signal"
 	}
 
 	if signal == SignalEmpty {
-		return TradingDecisionResult{SignalEmpty, ""}
+		result.Signal = SignalEmpty
+		result.Reason = ""
+		result.Explanation = explanation
+		result.SentimentSignal = string(convertSentimentToSignal(sentimentAnalysis))
+		return result
 	}
 
 	sentimentSignal := convertSentimentToSignal(sentimentAnalysis)
+	result.SentimentSignal = string(sentimentSignal)
 
 	if sentimentSignal == SignalEmpty {
+		explanation += ". Sentiment neutral"
 	} else if signal == sentimentSignal {
 		signal = sentimentSignal
 		reason = "sentiment"
+		explanation += ". Sentiment confirms: " + string(sentimentSignal)
 	} else {
 		signal = SignalEmpty
 		reason = ""
+		explanation += ". Sentiment " + string(sentimentSignal) + " contradicts signal"
 	}
 
-	return TradingDecisionResult{signal, reason}
+	result.Signal = signal
+	result.Reason = reason
+	result.Explanation = explanation
+	return result
 }
 
 func convertIchimokuToSignal(analysis IchimokuAnalysis) Signal {

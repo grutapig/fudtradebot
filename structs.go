@@ -113,10 +113,12 @@ type TradingState struct {
 	CurrentPosition       PositionSide
 	OpenedAt              time.Time
 	OpenReason            string
+	PositionUUID          string
 	LastSentimentAnalysis ClaudeSentimentResponse
 	LastAnalyzedTweetID   string
 	LastFudCheckTime      time.Time
 	LastFudCheckTweetID   string
+	LastDecisionHash      string
 }
 
 type CommunityTweet struct {

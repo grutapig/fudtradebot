@@ -174,6 +174,8 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		log.Printf("[%s] Current position: no active position", pair.Symbol)
 	}
 
+	var lastFudAttack ClaudeFudAttackResponse
+
 	currentPosition, err := exchange.GetPosition(pair.Symbol)
 	if err != nil {
 		log.Printf("[%s] Failed to get current position: %v", pair.Symbol, err)
@@ -291,6 +293,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 					if err != nil {
 						log.Printf("[%s] FUD attack analysis failed: %v", pair.Symbol, err)
 					} else {
+						lastFudAttack = fudAttack
 						log.Printf("\n[%s] ===== FUD ATTACK ANALYSIS =====", pair.Symbol)
 						if fudAttack.HasAttack {
 							log.Printf("[%s] ⚠️  COORDINATED FUD ATTACK DETECTED!", pair.Symbol)
@@ -324,6 +327,51 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 
 	decision := MakeTradingDecision(btcIchimoku.Analysis, coinIchimoku.Analysis, activityAnalysis, fudActivityAnalysis, sentiment)
 	log.Printf("\n[%s] ===== DECISION: %s (reason: %s) =====", pair.Symbol, decision.Signal, decision.Reason)
+	log.Printf("[%s] Explanation: %s", pair.Symbol, decision.Explanation)
+
+	fudAttackInfo := "no"
+	if lastFudAttack.HasAttack {
+		fudAttackInfo = "yes"
+	}
+
+	decisionRecord := TradingDecisionRecord{
+		PositionUUID:        state.PositionUUID,
+		Symbol:              pair.Symbol,
+		BTCIchimoku:         decision.BTCIchimokuSignal,
+		CoinIchimoku:        decision.CoinIchimokuSignal,
+		Activity:            decision.ActivitySignal,
+		FudActivity:         decision.FudActivitySignal,
+		Sentiment:           decision.SentimentSignal,
+		FudAttack:           fudAttackInfo,
+		FinalDecision:       string(decision.Signal),
+		DecisionExplanation: decision.Explanation,
+		CreatedAt:           time.Now(),
+	}
+
+	shouldSave := false
+	lastDecision, err := GetLatestTradingDecision(pair.Symbol)
+	if err != nil {
+		log.Printf("[%s] Failed to get last decision: %v", pair.Symbol, err)
+		shouldSave = true
+	} else if lastDecision == nil {
+		shouldSave = true
+	} else if lastDecision.BTCIchimoku != decisionRecord.BTCIchimoku ||
+		lastDecision.CoinIchimoku != decisionRecord.CoinIchimoku ||
+		lastDecision.Activity != decisionRecord.Activity ||
+		lastDecision.FudActivity != decisionRecord.FudActivity ||
+		lastDecision.Sentiment != decisionRecord.Sentiment ||
+		lastDecision.FudAttack != decisionRecord.FudAttack ||
+		lastDecision.FinalDecision != decisionRecord.FinalDecision {
+		shouldSave = true
+	}
+
+	if shouldSave {
+		if err := SaveTradingDecision(decisionRecord); err != nil {
+			log.Printf("[%s] Failed to save trading decision: %v", pair.Symbol, err)
+		} else {
+			log.Printf("[%s] Trading decision saved to database", pair.Symbol)
+		}
+	}
 
 	if decision.Signal == SignalEmpty {
 		if state.CurrentPosition != PositionSideBoth {
@@ -340,6 +388,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 				}
 			}
 			state.CurrentPosition = PositionSideBoth
+			state.PositionUUID = ""
 			log.Printf("[%s] Position closed", pair.Symbol)
 		} else {
 			log.Printf("[%s] No signal - no action", pair.Symbol)
@@ -368,6 +417,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		}
 		state.CurrentPosition = PositionSideBoth
 		state.OpenReason = ""
+		state.PositionUUID = ""
 	}
 
 	log.Printf("[%s] Opening %s position", pair.Symbol, desiredPosition)
@@ -380,7 +430,25 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	state.CurrentPosition = desiredPosition
 	state.OpenedAt = time.Now()
 	state.OpenReason = decision.Reason
-	log.Printf("[%s] Position opened: %s (entry: %.6f, amount: %.6f, reason: %s)", pair.Symbol, desiredPosition, position.EntryPrice, position.Amount, decision.Reason)
+	state.PositionUUID = GeneratePositionUUID()
+
+	if err := SaveTradingDecision(TradingDecisionRecord{
+		PositionUUID:        state.PositionUUID,
+		Symbol:              pair.Symbol,
+		BTCIchimoku:         decision.BTCIchimokuSignal,
+		CoinIchimoku:        decision.CoinIchimokuSignal,
+		Activity:            decision.ActivitySignal,
+		FudActivity:         decision.FudActivitySignal,
+		Sentiment:           decision.SentimentSignal,
+		FudAttack:           fudAttackInfo,
+		FinalDecision:       string(decision.Signal),
+		DecisionExplanation: decision.Explanation,
+		CreatedAt:           time.Now(),
+	}); err != nil {
+		log.Printf("[%s] Failed to save opening decision: %v", pair.Symbol, err)
+	}
+
+	log.Printf("[%s] Position opened: %s (entry: %.6f, amount: %.6f, reason: %s, UUID: %s)", pair.Symbol, desiredPosition, position.EntryPrice, position.Amount, decision.Reason, state.PositionUUID)
 
 	return nil
 }

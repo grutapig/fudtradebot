@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"time"
@@ -26,6 +27,21 @@ type PositionSnapshot struct {
 	CreatedAt        time.Time `gorm:"index"`
 }
 
+type TradingDecisionRecord struct {
+	ID                  uint   `gorm:"primarykey"`
+	PositionUUID        string `gorm:"index"`
+	Symbol              string `gorm:"index"`
+	BTCIchimoku         string
+	CoinIchimoku        string
+	Activity            string
+	FudActivity         string
+	Sentiment           string
+	FudAttack           string
+	FinalDecision       string
+	DecisionExplanation string
+	CreatedAt           time.Time `gorm:"index"`
+}
+
 var DB *gorm.DB
 
 func InitDatabase() error {
@@ -35,7 +51,7 @@ func InitDatabase() error {
 		return err
 	}
 
-	return DB.AutoMigrate(&BalanceRecord{}, &PositionSnapshot{})
+	return DB.AutoMigrate(&BalanceRecord{}, &PositionSnapshot{}, &TradingDecisionRecord{})
 }
 
 func SaveBalance(asset string, balance float64) error {
@@ -107,4 +123,30 @@ func GetLatestPositionSnapshot(symbol string) (*PositionSnapshot, error) {
 	}
 
 	return &snapshot, nil
+}
+
+func SaveTradingDecision(decision TradingDecisionRecord) error {
+	return DB.Create(&decision).Error
+}
+
+func GetLatestTradingDecision(symbol string) (*TradingDecisionRecord, error) {
+	var record TradingDecisionRecord
+
+	err := DB.Where("symbol = ?", symbol).
+		Order("created_at DESC").
+		First(&record).Error
+
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &record, nil
+}
+
+func GeneratePositionUUID() string {
+	return uuid.New().String()
 }
