@@ -146,6 +146,4 @@ func TestAsterDexExchange_GetKlines(t *testing.T) {
 	aga := GenerateIchimokuSVG(result, cloud.Data, 800, 600)
 	os.WriteFile("chart.svg", []byte(aga), 0655)
 	fmt.Printf("analyze %+v", cloud.Analysis)
-	action := GetTradingAction(cloud.Analysis, "")
-	fmt.Println("action:", action)
 }

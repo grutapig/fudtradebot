@@ -282,29 +282,3 @@ func minSlice(values []float64) float64 {
 	}
 	return min
 }
-
-func GetTradingAction(analysis IchimokuAnalysis, currentPosition PositionSide) TradingAction {
-	if currentPosition == PositionSideLong {
-		if analysis.Signal == IchimokuSignalStrongShort || analysis.Signal == IchimokuSignalShort {
-			return TradingActionCloseLong
-		}
-		return TradingActionHold
-	}
-
-	if currentPosition == PositionSideShort {
-		if analysis.Signal == IchimokuSignalStrongLong || analysis.Signal == IchimokuSignalLong {
-			return TradingActionCloseShort
-		}
-		return TradingActionHold
-	}
-
-	if analysis.Signal == IchimokuSignalStrongLong || analysis.Signal == IchimokuSignalLong {
-		return TradingActionOpenLong
-	}
-
-	if analysis.Signal == IchimokuSignalStrongShort || analysis.Signal == IchimokuSignalShort {
-		return TradingActionOpenShort
-	}
-
-	return TradingActionHold
-}

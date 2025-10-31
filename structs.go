@@ -84,7 +84,23 @@ const (
 	TradingActionCloseLong  TradingAction = "CLOSE_LONG"
 	TradingActionCloseShort TradingAction = "CLOSE_SHORT"
 	TradingActionHold       TradingAction = "HOLD"
+	TradingActionSkip       TradingAction = "SKIP"
 )
+
+type SignalStrength int
+
+const (
+	SignalStrengthNone   SignalStrength = 0
+	SignalStrengthWeak   SignalStrength = 1
+	SignalStrengthMedium SignalStrength = 2
+	SignalStrengthStrong SignalStrength = 3
+)
+
+type TradingSignal struct {
+	Action   TradingAction
+	Strength SignalStrength
+	Reasons  []string
+}
 
 type TradingPair struct {
 	CommunityID string
