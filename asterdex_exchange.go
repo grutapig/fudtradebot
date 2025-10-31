@@ -388,29 +388,50 @@ func (e *AsterDexExchange) GetMarkPrice(symbol string) (float64, error) {
 	return price, nil
 }
 
+type AccountBalanceInfo struct {
+	TotalBalance     float64
+	AvailableBalance float64
+}
+
 func (e *AsterDexExchange) GetBalance() (float64, error) {
+	info, err := e.GetBalanceInfo()
+	if err != nil {
+		return 0, err
+	}
+	return info.TotalBalance, nil
+}
+
+func (e *AsterDexExchange) GetBalanceInfo() (AccountBalanceInfo, error) {
 	body, err := e.doRequest("GET", "/fapi/v2/balance", "", true)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get balance: %w", err)
+		return AccountBalanceInfo{}, fmt.Errorf("failed to get balance: %w", err)
 	}
 
 	var balances []AsterDexBalance
 	if err := json.Unmarshal(body, &balances); err != nil {
-		return 0, fmt.Errorf("failed to parse balance: %w", err)
+		return AccountBalanceInfo{}, fmt.Errorf("failed to parse balance: %w", err)
 	}
 
-	// Find USDT balance
 	for _, bal := range balances {
 		if bal.Asset == "USDT" {
-			balance, err := strconv.ParseFloat(bal.AvailableBalance, 64)
+			totalBalance, err := strconv.ParseFloat(bal.Balance, 64)
 			if err != nil {
-				return 0, fmt.Errorf("failed to parse balance value: %w", err)
+				return AccountBalanceInfo{}, fmt.Errorf("failed to parse total balance: %w", err)
 			}
-			return balance, nil
+
+			availableBalance, err := strconv.ParseFloat(bal.AvailableBalance, 64)
+			if err != nil {
+				return AccountBalanceInfo{}, fmt.Errorf("failed to parse available balance: %w", err)
+			}
+
+			return AccountBalanceInfo{
+				TotalBalance:     totalBalance,
+				AvailableBalance: availableBalance,
+			}, nil
 		}
 	}
 
-	return 0, fmt.Errorf("USDT balance not found")
+	return AccountBalanceInfo{}, fmt.Errorf("USDT balance not found")
 }
 
 func (e *AsterDexExchange) Klines(pair string, interval string, startTime, endTime int64, limit int) ([]AsterDexKline, error) {

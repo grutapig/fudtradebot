@@ -364,6 +364,137 @@
             font-size: 1.5em;
             color: #00ccff;
         }
+
+        .decisions-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .decision-group {
+            background: rgba(0, 204, 255, 0.05);
+            border: 1px solid #00ccff;
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .decision-group-header {
+            color: #00ff88;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #00ccff;
+        }
+
+        .decision-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .decision-item {
+            background: rgba(10, 14, 39, 0.8);
+            border: 1px solid #00ccff;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .decision-item:hover {
+            background: rgba(0, 204, 255, 0.15);
+            transform: translateX(5px);
+        }
+
+        .decision-time {
+            color: #888;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+
+        .decision-signals {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .decision-badge {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .badge-long {
+            background: rgba(0, 255, 136, 0.3);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+        }
+
+        .badge-short {
+            background: rgba(255, 68, 68, 0.3);
+            border: 1px solid #ff4444;
+            color: #ff4444;
+        }
+
+        .badge-empty {
+            background: rgba(255, 170, 0, 0.3);
+            border: 1px solid #ffaa00;
+            color: #ffaa00;
+        }
+
+        .signal-icon {
+            font-size: 1.1em;
+            cursor: help;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .signal-icon:hover {
+            transform: scale(1.1);
+        }
+
+        .signal-bg-long {
+            background: rgba(0, 255, 136, 0.3);
+            border-color: #00ff88;
+        }
+
+        .signal-bg-short {
+            background: rgba(255, 68, 68, 0.3);
+            border-color: #ff4444;
+        }
+
+        .signal-bg-empty {
+            background: rgba(128, 128, 128, 0.3);
+            border-color: #888;
+        }
+
+        .fud-attack-warning {
+            color: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .explanation-text {
+            background: rgba(0, 204, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #00ccff;
+            color: #00ff88;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body>
@@ -383,69 +514,78 @@
                     <canvas id="balanceChart"></canvas>
                 </div>
 
-                <div class="positions-section">
-                    <div class="positions-box">
-                        <div class="box-title">Active Positions</div>
-                        <div class="positions-list">
-                            <div v-for="pos in activePositions" 
-                                 :key="pos.id" 
-                                 class="position-item"
-                                 @click="openPositionDetail(pos.id)">
-                                <div class="position-info">
-                                    <div class="position-header-row">
-                                        <span class="position-symbol">{{ pos.symbol }}</span>
-                                        <div class="position-icons">
-                                            <span class="icon" :class="pos.direction === 'LONG' ? 'icon-long' : 'icon-short'">
-                                                {{ pos.direction === 'LONG' ? '↑' : '↓' }}
-                                            </span>
-                                            <span class="icon" :class="'icon-' + pos.reason" :title="pos.reason">
-                                                {{ getReasonIcon(pos.reason) }}
-                                            </span>
-                                        </div>
+                <div class="chart-container">
+                    <div class="chart-title">Position History</div>
+                    <div class="positions-list">
+                        <div v-for="position in positionHistory.slice(0, 20)" 
+                             :key="position.position_uuid" 
+                             class="position-item"
+                             @click="openPositionHistoryModal(position.position_uuid)">
+                            <div class="position-info">
+                                <div class="position-header-row">
+                                    <div class="position-symbol">{{ position.symbol }}</div>
+                                    <div class="position-icons">
+                                        <span class="icon" :class="'icon-' + position.side.toLowerCase()">{{ position.side === 'LONG' ? '📈' : '📉' }}</span>
                                     </div>
-                                    <div class="position-details-row">
-                                        <div class="detail-label">Date:</div>
-                                        <div class="detail-value">{{ formatDate(pos.date) }}</div>
-                                        <div class="detail-label">Amount:</div>
-                                        <div class="detail-value">${{ pos.amount.toFixed(2) }}</div>
-                                        <div class="detail-label">Result:</div>
-                                        <div class="detail-value" :class="pos.result >= 0 ? 'result-positive' : 'result-negative'">
-                                            {{ pos.result >= 0 ? '+' : '' }}${{ pos.result.toFixed(2) }}
-                                        </div>
+                                </div>
+                                <div class="position-details-row">
+                                    <div>
+                                        <div class="detail-label">Opened</div>
+                                        <div class="detail-value">{{ formatTime(position.opened_at) }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="detail-label">Closed</div>
+                                        <div class="detail-value">{{ formatTime(position.closed_at) }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="detail-label">Result</div>
+                                        <div class="detail-value" :class="position.final_pl >= 0 ? 'result-positive' : 'result-negative'">{{ position.final_pl.toFixed(2) }} USDT</div>
+                                    </div>
+                                    <div>
+                                        <div class="detail-label">Entry</div>
+                                        <div class="detail-value">{{ position.entry_price.toFixed(4) }}</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="positions-box">
-                        <div class="box-title">Positions History</div>
-                        <div class="positions-list">
-                            <div v-for="pos in closedPositions" 
-                                 :key="pos.id" 
-                                 class="position-item"
-                                 @click="openPositionDetail(pos.id)">
-                                <div class="position-info">
-                                    <div class="position-header-row">
-                                        <span class="position-symbol">{{ pos.symbol }}</span>
-                                        <div class="position-icons">
-                                            <span class="icon" :class="pos.direction === 'LONG' ? 'icon-long' : 'icon-short'">
-                                                {{ pos.direction === 'LONG' ? '↑' : '↓' }}
-                                            </span>
-                                            <span class="icon" :class="'icon-' + pos.reason" :title="pos.reason">
-                                                {{ getReasonIcon(pos.reason) }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="position-details-row">
-                                        <div class="detail-label">Date:</div>
-                                        <div class="detail-value">{{ formatDate(pos.date) }}</div>
-                                        <div class="detail-label">Amount:</div>
-                                        <div class="detail-value">${{ pos.amount.toFixed(2) }}</div>
-                                        <div class="detail-label">Result:</div>
-                                        <div class="detail-value" :class="pos.result >= 0 ? 'result-positive' : 'result-negative'">
-                                            {{ pos.result >= 0 ? '+' : '' }}${{ pos.result.toFixed(2) }}
-                                        </div>
+                <div class="chart-container">
+                    <div class="chart-title">Trading Decisions</div>
+                    <div class="decisions-container">
+                        <div v-for="(decisions, symbol) in groupedDecisions" :key="symbol" class="decision-group">
+                            <div class="decision-group-header">{{ symbol }}</div>
+                            <div class="decision-list">
+                                <div v-for="decision in decisions.slice(0, 10)" 
+                                     :key="decision.id" 
+                                     class="decision-item"
+                                     @click="openDecisionDetail(decision.id)">
+                                    <div class="decision-time">{{ formatTime(decision.created_at) }}</div>
+                                    <div class="decision-signals">
+                                        <span class="decision-badge" 
+                                              :class="'badge-' + decision.decision.toLowerCase()"
+                                              :title="getDecisionTooltip(decision.decision)">
+                                            {{ decision.decision }}
+                                        </span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.btc_ichimoku.toLowerCase()"
+                                              :title="getSignalTooltip('BTC Ichimoku', decision.btc_ichimoku)">₿</span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.coin_ichimoku.toLowerCase()"
+                                              :title="getSignalTooltip('Coin Ichimoku', decision.coin_ichimoku)">🪙</span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.activity.toLowerCase()"
+                                              :title="getSignalTooltip('Community Activity', decision.activity)">📊</span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.fud_activity.toLowerCase()"
+                                              :title="getSignalTooltip('FUD Activity', decision.fud_activity)">⚡</span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.sentiment.toLowerCase()"
+                                              :title="getSignalTooltip('Sentiment', decision.sentiment)">💭</span>
+                                        <span v-if="decision.fud_attack === 'yes'" 
+                                              class="signal-icon fud-attack-warning" 
+                                              title="⚠️ FUD Attack: Coordinated negative campaign detected">⚠️</span>
                                     </div>
                                 </div>
                             </div>
@@ -454,96 +594,141 @@
                 </div>
             </template>
 
-            <div class="modal" :class="{ active: showModal }" @click.self="closeModal">
-                <div class="modal-content" v-if="selectedPosition">
+            <div class="modal" :class="{ active: showPositionHistoryModal }" @click.self="closePositionHistoryModal">
+                <div class="modal-content" v-if="selectedPositionHistory">
                     <div class="modal-header">
-                        <div class="modal-title">Position Details: {{ selectedPosition.symbol }}</div>
-                        <button class="close-btn" @click="closeModal">Close</button>
+                        <div class="modal-title">Position History: {{ selectedPositionHistory.symbol }}</div>
+                        <button class="close-btn" @click="closePositionHistoryModal">Close</button>
                     </div>
 
                     <div class="modal-section">
                         <div class="section-title">Position Information</div>
                         <div class="info-grid">
                             <div class="info-item">
-                                <div class="info-label">Direction</div>
-                                <div class="info-value">{{ selectedPosition.direction }}</div>
+                                <div class="info-label">Side</div>
+                                <div class="info-value">{{ selectedPositionHistory.direction }}</div>
                             </div>
                             <div class="info-item">
-                                <div class="info-label">Amount</div>
-                                <div class="info-value">${{ selectedPosition.amount.toFixed(2) }}</div>
-                            </div>
-                            <div class="info-item">
-                                <div class="info-label">Coins Amount</div>
-                                <div class="info-value">{{ selectedPosition.coins_amount.toFixed(2) }}</div>
+                                <div class="info-label">Entry Price</div>
+                                <div class="info-value">{{ selectedPositionHistory.amount?.toFixed(4) }}</div>
                             </div>
                             <div class="info-item">
                                 <div class="info-label">Result</div>
-                                <div class="info-value" :class="selectedPosition.result >= 0 ? 'result-positive' : 'result-negative'">
-                                    {{ selectedPosition.result >= 0 ? '+' : '' }}${{ selectedPosition.result.toFixed(2) }}
+                                <div class="info-value" :class="selectedPositionHistory.result >= 0 ? 'result-positive' : 'result-negative'">
+                                    {{ selectedPositionHistory.result?.toFixed(2) }} USDT
                                 </div>
                             </div>
                             <div class="info-item">
-                                <div class="info-label">Opened At</div>
-                                <div class="info-value">{{ formatDateTime(selectedPosition.opened_at) }}</div>
+                                <div class="info-label">Duration</div>
+                                <div class="info-value">{{ Math.round((new Date(selectedPositionHistory.closed_at) - new Date(selectedPositionHistory.opened_at)) / 3600000) }}h</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section" v-if="selectedPositionHistory.decisions && selectedPositionHistory.decisions.length > 0">
+                        <div class="section-title">Trading Decisions ({{ selectedPositionHistory.decisions.length }})</div>
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            <div v-for="(decision, index) in selectedPositionHistory.decisions" :key="decision.id" class="history-item">
+                                <div class="history-header">
+                                    <div class="history-action">#{{ index + 1 }} {{ decision.final_decision }}</div>
+                                    <div class="history-time">{{ formatDateTime(decision.created_at) }}</div>
+                                </div>
+                                <div class="history-reason">{{ decision.decision_explanation }}</div>
+                                <div class="trend-graph">
+                                    <div class="trend-item">
+                                        <div class="trend-label">BTC Ichimoku</div>
+                                        <div class="trend-value" :class="getTrendClass(decision.btc_ichimoku)">{{ decision.btc_ichimoku }}</div>
+                                    </div>
+                                    <div class="trend-item">
+                                        <div class="trend-label">Coin Ichimoku</div>
+                                        <div class="trend-value" :class="getTrendClass(decision.coin_ichimoku)">{{ decision.coin_ichimoku }}</div>
+                                    </div>
+                                    <div class="trend-item">
+                                        <div class="trend-label">Activity</div>
+                                        <div class="trend-value" :class="getTrendClass(decision.activity)">{{ decision.activity }}</div>
+                                    </div>
+                                    <div class="trend-item">
+                                        <div class="trend-label">FUD Activity</div>
+                                        <div class="trend-value" :class="getTrendClass(decision.fud_activity)">{{ decision.fud_activity }}</div>
+                                    </div>
+                                    <div class="trend-item">
+                                        <div class="trend-label">Sentiment</div>
+                                        <div class="trend-value" :class="getTrendClass(decision.sentiment)">{{ decision.sentiment }}</div>
+                                    </div>
+                                    <div class="trend-item" v-if="decision.fud_attack === 'yes'">
+                                        <div class="trend-label">FUD Attack</div>
+                                        <div class="trend-value result-negative">YES ⚠️</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal" :class="{ active: showDecisionModal }" @click.self="closeDecisionModal">
+                <div class="modal-content" v-if="selectedDecision">
+                    <div class="modal-header">
+                        <div class="modal-title">Decision Details: {{ selectedDecision.Symbol }}</div>
+                        <button class="close-btn" @click="closeDecisionModal">Close</button>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">Decision Information</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Final Decision</div>
+                                <div class="info-value" :class="'badge-' + selectedDecision.FinalDecision.toLowerCase()">
+                                    {{ selectedDecision.FinalDecision }}
+                                </div>
                             </div>
                             <div class="info-item">
-                                <div class="info-label">Closed At</div>
-                                <div class="info-value">{{ selectedPosition.closed_at ? formatDateTime(selectedPosition.closed_at) : 'Active' }}</div>
+                                <div class="info-label">Position UUID</div>
+                                <div class="info-value" style="font-size: 0.8em;">{{ selectedDecision.PositionUUID || 'N/A' }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Date</div>
+                                <div class="info-value">{{ formatDateTime(selectedDecision.CreatedAt) }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">FUD Attack</div>
+                                <div class="info-value" :class="selectedDecision.FudAttack === 'yes' ? 'result-negative' : 'result-positive'">
+                                    {{ selectedDecision.FudAttack === 'yes' ? 'YES ⚠️' : 'NO' }}
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="modal-section">
-                        <div class="section-title">Position History</div>
-                        <div v-for="(item, index) in selectedPosition.history" :key="index" class="history-item">
-                            <div class="history-header">
-                                <span class="history-action">{{ item.action }}</span>
-                                <span class="history-time">{{ formatDateTime(item.timestamp) }}</span>
+                        <div class="section-title">Signal Analysis</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">BTC Ichimoku</div>
+                                <div class="info-value">{{ selectedDecision.BTCIchimoku }}</div>
                             </div>
-                            <div class="history-reason">{{ item.reason }}</div>
-                            <div class="info-grid" style="margin-bottom: 10px;">
-                                <div class="info-item">
-                                    <div class="info-label">Amount</div>
-                                    <div class="info-value">${{ item.amount.toFixed(2) }}</div>
-                                </div>
-                                <div class="info-item">
-                                    <div class="info-label">Coins</div>
-                                    <div class="info-value">{{ item.coins_amount.toFixed(2) }}</div>
-                                </div>
+                            <div class="info-item">
+                                <div class="info-label">Coin Ichimoku</div>
+                                <div class="info-value">{{ selectedDecision.CoinIchimoku }}</div>
                             </div>
-                            <div class="section-title" style="font-size: 1em; margin-top: 10px;">Trend Analysis</div>
-                            <div class="trend-graph">
-                                <div class="trend-item">
-                                    <div class="trend-label">Bitcoin</div>
-                                    <div class="trend-value" :class="'trend-' + item.trend_analysis.bitcoin_trend">
-                                        {{ item.trend_analysis.bitcoin_trend }}
-                                    </div>
-                                </div>
-                                <div class="trend-item">
-                                    <div class="trend-label">Coin</div>
-                                    <div class="trend-value" :class="'trend-' + item.trend_analysis.coin_trend">
-                                        {{ item.trend_analysis.coin_trend }}
-                                    </div>
-                                </div>
-                                <div class="trend-item">
-                                    <div class="trend-label">Activity</div>
-                                    <div class="trend-value" :class="'trend-' + item.trend_analysis.activity_trend">
-                                        {{ item.trend_analysis.activity_trend }}
-                                    </div>
-                                </div>
-                                <div class="trend-item">
-                                    <div class="trend-label">FUD Signal</div>
-                                    <div class="trend-value" :class="item.trend_analysis.fud_signal ? 'result-negative' : 'result-positive'">
-                                        {{ item.trend_analysis.fud_signal ? 'YES' : 'NO' }}
-                                    </div>
-                                </div>
-                                <div class="trend-item">
-                                    <div class="trend-label">Sentiment</div>
-                                    <div class="trend-value" :class="'trend-' + item.trend_analysis.sentiment_trend">
-                                        {{ item.trend_analysis.sentiment_trend }}
-                                    </div>
-                                </div>
+                            <div class="info-item">
+                                <div class="info-label">Activity</div>
+                                <div class="info-value">{{ selectedDecision.Activity }}</div>
                             </div>
+                            <div class="info-item">
+                                <div class="info-label">FUD Activity</div>
+                                <div class="info-value">{{ selectedDecision.FudActivity }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Sentiment</div>
+                                <div class="info-value">{{ selectedDecision.Sentiment }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">Explanation</div>
+                        <div class="explanation-text">
+                            {{ selectedDecision.DecisionExplanation }}
                         </div>
                     </div>
                 </div>
@@ -560,8 +745,14 @@
                     loading: true,
                     balanceHistory: [],
                     positions: [],
+                    decisions: {},
+                    positionHistory: [],
                     showModal: false,
                     selectedPosition: null,
+                    showDecisionModal: false,
+                    selectedDecision: null,
+                    showPositionHistoryModal: false,
+                    selectedPositionHistory: null,
                     chart: null
                 }
             },
@@ -571,22 +762,32 @@
                 },
                 closedPositions() {
                     return this.positions.filter(p => p.status === 'closed');
+                },
+                groupedDecisions() {
+                    return this.decisions;
                 }
             },
             methods: {
                 async fetchData() {
                     try {
-                        const [balanceRes, positionsRes] = await Promise.all([
+                        const [balanceRes, positionsRes, decisionsRes, posHistoryRes] = await Promise.all([
                             fetch('/api/balance-history'),
-                            fetch('/api/positions-list')
+                            fetch('/api/positions-list'),
+                            fetch('/api/decisions'),
+                            fetch('/api/position-snapshots-history')
                         ]);
 
                         const balanceData = await balanceRes.json();
                         const positionsData = await positionsRes.json();
+                        const decisionsData = await decisionsRes.json();
+                        const posHistoryData = await posHistoryRes.json();
 
                         this.balanceHistory = balanceData.history || [];
                         this.positions = positionsData.positions || [];
+                        this.decisions = decisionsData.decisions || {};
+                        this.positionHistory = posHistoryData.positions || [];
 
+                        await this.$nextTick();
                         this.renderChart();
                     } catch (err) {
                         console.error('Failed to fetch data:', err);
@@ -597,11 +798,16 @@
                 renderChart() {
                     const ctx = document.getElementById('balanceChart');
                     
+                    if (!ctx) {
+                        console.error('Canvas element not found');
+                        return;
+                    }
+                    
                     if (this.chart) {
                         this.chart.destroy();
                     }
 
-                    if (this.balanceHistory.length === 0) {
+                    if (!this.balanceHistory || this.balanceHistory.length === 0) {
                         return;
                     }
 
@@ -617,17 +823,30 @@
                                     minute: '2-digit' 
                                 });
                             }),
-                            datasets: [{
-                                label: 'Balance ($)',
-                                data: this.balanceHistory.map(p => p.balance),
-                                borderColor: '#00ff88',
-                                backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                                borderWidth: 3,
-                                tension: 0.4,
-                                fill: true,
-                                pointRadius: 4,
-                                pointHoverRadius: 6
-                            }]
+                            datasets: [
+                                {
+                                    label: 'Total Balance ($)',
+                                    data: this.balanceHistory.map(p => p.total_balance),
+                                    borderColor: '#00ff88',
+                                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                                    borderWidth: 3,
+                                    tension: 0.4,
+                                    fill: true,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6
+                                },
+                                {
+                                    label: 'Available Balance ($)',
+                                    data: this.balanceHistory.map(p => p.available_balance),
+                                    borderColor: '#00ccff',
+                                    backgroundColor: 'rgba(0, 204, 255, 0.1)',
+                                    borderWidth: 2,
+                                    tension: 0.4,
+                                    fill: false,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5
+                                }
+                            ]
                         },
                         options: {
                             responsive: true,
@@ -689,6 +908,40 @@
                     this.showModal = false;
                     this.selectedPosition = null;
                 },
+                async openDecisionDetail(decisionId) {
+                    try {
+                        const response = await fetch(`/api/decision-detail?id=${decisionId}`);
+                        this.selectedDecision = await response.json();
+                        this.showDecisionModal = true;
+                    } catch (err) {
+                        console.error('Failed to fetch decision details:', err);
+                    }
+                },
+                closeDecisionModal() {
+                    this.showDecisionModal = false;
+                    this.selectedDecision = null;
+                },
+                async openPositionHistoryModal(positionUUID) {
+                    try {
+                        const [positionRes, decisionsRes] = await Promise.all([
+                            fetch(`/api/position-detail?id=${positionUUID}`),
+                            fetch(`/api/position-decisions?position_uuid=${positionUUID}`)
+                        ]);
+                        const positionData = await positionRes.json();
+                        const decisionsData = await decisionsRes.json();
+                        this.selectedPositionHistory = {
+                            ...positionData,
+                            decisions: decisionsData.decisions || []
+                        };
+                        this.showPositionHistoryModal = true;
+                    } catch (err) {
+                        console.error('Failed to fetch position history:', err);
+                    }
+                },
+                closePositionHistoryModal() {
+                    this.showPositionHistoryModal = false;
+                    this.selectedPositionHistory = null;
+                },
                 getReasonIcon(reason) {
                     const icons = {
                         ichimoku: '☁',
@@ -703,10 +956,65 @@
                 },
                 formatDateTime(date) {
                     return new Date(date).toLocaleString();
+                },
+                formatTime(date) {
+                    const d = new Date(date);
+                    return d.toLocaleString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                },
+                getDecisionTooltip(decision) {
+                    const tooltips = {
+                        'LONG': 'LONG: Open a buy position - expecting price to go up',
+                        'SHORT': 'SHORT: Open a sell position - expecting price to go down',
+                        'EMPTY': 'EMPTY: No clear signal - conflicting indicators or insufficient data. Position will be closed if open, or no action taken if no position.'
+                    };
+                    return tooltips[decision] || decision;
+                },
+                getSignalTooltip(indicator, status) {
+                    const descriptions = {
+                        'BTC Ichimoku': {
+                            'LONG': '₿ BTC Ichimoku: LONG - Bitcoin trend is bullish',
+                            'SHORT': '₿ BTC Ichimoku: SHORT - Bitcoin trend is bearish',
+                            'EMPTY': '₿ BTC Ichimoku: EMPTY - Bitcoin trend is neutral or unclear'
+                        },
+                        'Coin Ichimoku': {
+                            'LONG': '🪙 Coin Ichimoku: LONG - Coin trend is bullish',
+                            'SHORT': '🪙 Coin Ichimoku: SHORT - Coin trend is bearish',
+                            'EMPTY': '🪙 Coin Ichimoku: EMPTY - Coin trend is neutral or unclear'
+                        },
+                        'Community Activity': {
+                            'LONG': '📊 Community Activity: LONG - Sharp rise in community engagement',
+                            'SHORT': '📊 Community Activity: SHORT - Sharp drop in community engagement',
+                            'EMPTY': '📊 Community Activity: EMPTY - No significant change in activity'
+                        },
+                        'FUD Activity': {
+                            'SHORT': '⚡ FUD Activity: SHORT - Sharp rise in FUD/negative sentiment',
+                            'EMPTY': '⚡ FUD Activity: EMPTY - No significant FUD activity detected'
+                        },
+                        'Sentiment': {
+                            'SHORT': '💭 Sentiment: SHORT - Declining sentiment with low score',
+                            'EMPTY': '💭 Sentiment: EMPTY - Sentiment is stable or cannot generate signal alone'
+                        }
+                    };
+                    
+                    if (descriptions[indicator] && descriptions[indicator][status]) {
+                        return descriptions[indicator][status];
+                    }
+                    return `${indicator}: ${status}`;
+                },
+                getTrendClass(trend) {
+                    if (trend === 'LONG') return 'trend-up';
+                    if (trend === 'SHORT') return 'trend-down';
+                    return 'trend-flat';
                 }
             },
             mounted() {
                 this.fetchData();
+                setTimeout(() => this.fetchData(), 3000);
                 setInterval(() => this.fetchData(), 30000);
             }
         }).mount('#app');

@@ -119,14 +119,15 @@ func runBalanceCollector(exchange AsterDexExchange) {
 	defer ticker.Stop()
 
 	for {
-		balance, err := exchange.GetBalance()
+		balanceInfo, err := exchange.GetBalanceInfo()
 		if err != nil {
 			log.Printf("Failed to get balance: %v", err)
 		} else {
-			if err := SaveBalance("USDT", balance); err != nil {
+			if err := SaveBalance("USDT", balanceInfo.TotalBalance, balanceInfo.AvailableBalance); err != nil {
 				log.Printf("Failed to save balance: %v", err)
 			} else {
-				log.Printf("Balance saved: %.2f USDT", balance)
+				log.Printf("Balance saved - Total: %.2f USDT, Available: %.2f USDT",
+					balanceInfo.TotalBalance, balanceInfo.AvailableBalance)
 			}
 		}
 		<-ticker.C
@@ -186,7 +187,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 			markPrice = 0
 		}
 
-		if err := SavePositionSnapshot(*currentPosition, markPrice); err != nil {
+		if err := SavePositionSnapshot(*currentPosition, markPrice, state.PositionUUID); err != nil {
 			log.Printf("[%s] Failed to save position snapshot: %v", pair.Symbol, err)
 		} else {
 			log.Printf("[%s] Position snapshot saved: P/L %.2f USDT, Mark Price %.6f",
@@ -365,17 +366,21 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		shouldSave = true
 	}
 
+	var savedDecision *TradingDecisionRecord
 	if shouldSave {
 		if err := SaveTradingDecision(decisionRecord); err != nil {
 			log.Printf("[%s] Failed to save trading decision: %v", pair.Symbol, err)
 		} else {
 			log.Printf("[%s] Trading decision saved to database", pair.Symbol)
+			lastSaved, _ := GetLatestTradingDecision(pair.Symbol)
+			savedDecision = lastSaved
 		}
 	}
 
 	if decision.Signal == SignalEmpty {
 		if state.CurrentPosition != PositionSideBoth {
 			log.Printf("[%s] No signal - closing existing position", pair.Symbol)
+
 			if state.CurrentPosition == PositionSideLong {
 				if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
 					log.Printf("[%s] Failed to close LONG: %v", pair.Symbol, err)
@@ -387,6 +392,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 					return err
 				}
 			}
+
 			state.CurrentPosition = PositionSideBoth
 			state.PositionUUID = ""
 			log.Printf("[%s] Position closed", pair.Symbol)
@@ -411,10 +417,12 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 
 	if state.CurrentPosition != PositionSideBoth {
 		log.Printf("[%s] Closing existing %s position", pair.Symbol, state.CurrentPosition)
+
 		if err := exchange.ClosePosition(pair.Symbol, state.CurrentPosition); err != nil {
 			log.Printf("[%s] Failed to close position: %v", pair.Symbol, err)
 			return err
 		}
+
 		state.CurrentPosition = PositionSideBoth
 		state.OpenReason = ""
 		state.PositionUUID = ""
@@ -432,20 +440,30 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	state.OpenReason = decision.Reason
 	state.PositionUUID = GeneratePositionUUID()
 
-	if err := SaveTradingDecision(TradingDecisionRecord{
-		PositionUUID:        state.PositionUUID,
-		Symbol:              pair.Symbol,
-		BTCIchimoku:         decision.BTCIchimokuSignal,
-		CoinIchimoku:        decision.CoinIchimokuSignal,
-		Activity:            decision.ActivitySignal,
-		FudActivity:         decision.FudActivitySignal,
-		Sentiment:           decision.SentimentSignal,
-		FudAttack:           fudAttackInfo,
-		FinalDecision:       string(decision.Signal),
-		DecisionExplanation: decision.Explanation,
-		CreatedAt:           time.Now(),
-	}); err != nil {
-		log.Printf("[%s] Failed to save opening decision: %v", pair.Symbol, err)
+	if savedDecision != nil && savedDecision.ID > 0 {
+		if err := UpdateDecisionPositionUUIDByID(savedDecision.ID, state.PositionUUID); err != nil {
+			log.Printf("[%s] Failed to update decision ID %d with position UUID: %v", pair.Symbol, savedDecision.ID, err)
+		} else {
+			log.Printf("[%s] Decision ID %d updated with position UUID: %s", pair.Symbol, savedDecision.ID, state.PositionUUID)
+		}
+	} else {
+		if err := SaveTradingDecision(TradingDecisionRecord{
+			PositionUUID:        state.PositionUUID,
+			Symbol:              pair.Symbol,
+			BTCIchimoku:         decision.BTCIchimokuSignal,
+			CoinIchimoku:        decision.CoinIchimokuSignal,
+			Activity:            decision.ActivitySignal,
+			FudActivity:         decision.FudActivitySignal,
+			Sentiment:           decision.SentimentSignal,
+			FudAttack:           fudAttackInfo,
+			FinalDecision:       string(decision.Signal),
+			DecisionExplanation: decision.Explanation,
+			CreatedAt:           time.Now(),
+		}); err != nil {
+			log.Printf("[%s] Failed to save opening decision: %v", pair.Symbol, err)
+		} else {
+			log.Printf("[%s] New decision saved with position UUID: %s", pair.Symbol, state.PositionUUID)
+		}
 	}
 
 	log.Printf("[%s] Position opened: %s (entry: %.6f, amount: %.6f, reason: %s, UUID: %s)", pair.Symbol, desiredPosition, position.EntryPrice, position.Amount, decision.Reason, state.PositionUUID)

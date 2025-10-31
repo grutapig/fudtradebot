@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -34,6 +35,14 @@ func handleAPIRoutes(w http.ResponseWriter, r *http.Request) {
 		handlePositionsList(w, r)
 	case strings.HasPrefix(path, "/position-detail"):
 		handlePositionDetail(w, r)
+	case strings.HasPrefix(path, "/decisions"):
+		handleDecisions(w, r)
+	case strings.HasPrefix(path, "/decision-detail"):
+		handleDecisionDetail(w, r)
+	case strings.HasPrefix(path, "/position-snapshots-history"):
+		handlePositionSnapshotsHistory(w, r)
+	case strings.HasPrefix(path, "/position-decisions"):
+		handlePositionDecisions(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -188,11 +197,18 @@ func handleBalanceHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history := make([]BalancePoint, len(records))
+	type BalanceHistoryPoint struct {
+		Timestamp        int64   `json:"timestamp"`
+		TotalBalance     float64 `json:"total_balance"`
+		AvailableBalance float64 `json:"available_balance"`
+	}
+
+	history := make([]BalanceHistoryPoint, len(records))
 	for i, record := range records {
-		history[i] = BalancePoint{
-			Timestamp: record.Timestamp.UnixMilli(),
-			Balance:   record.Balance,
+		history[i] = BalanceHistoryPoint{
+			Timestamp:        record.Timestamp.UnixMilli(),
+			TotalBalance:     record.TotalBalance,
+			AvailableBalance: record.AvailableBalance,
 		}
 	}
 
@@ -242,14 +258,6 @@ func handlePositionsList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if statusFilter == "" || statusFilter == "closed" {
-		for _, pos := range positionsHistory {
-			if pos.Status == "closed" {
-				positions = append(positions, pos)
-			}
-		}
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"positions": positions,
@@ -267,20 +275,117 @@ func handlePositionDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	positionID := r.URL.Query().Get("id")
-	if positionID == "" {
-		http.Error(w, "Position ID required", http.StatusBadRequest)
+	positionUUID := r.URL.Query().Get("id")
+	if positionUUID == "" {
+		http.Error(w, "Position UUID required", http.StatusBadRequest)
 		return
 	}
 
-	detail, exists := positionDetails[positionID]
-	if !exists {
+	snapshots, err := GetPositionSnapshotsByUUID(positionUUID)
+	if err != nil || len(snapshots) == 0 {
 		http.Error(w, "Position not found", http.StatusNotFound)
 		return
 	}
 
+	firstSnapshot := snapshots[0]
+	lastSnapshot := snapshots[len(snapshots)-1]
+
+	decisions, err := GetDecisionsByPositionUUID(positionUUID)
+	if err != nil {
+		log.Printf("Failed to get decisions: %v", err)
+		decisions = []TradingDecisionRecord{}
+	}
+
+	detail := PositionDetail{
+		ID:          positionUUID,
+		Symbol:      firstSnapshot.Symbol,
+		Amount:      lastSnapshot.UnrealizedPL,
+		CoinsAmount: lastSnapshot.Amount,
+		Direction:   firstSnapshot.Side,
+		OpenedAt:    firstSnapshot.PositionOpenedAt,
+		ClosedAt:    &lastSnapshot.CreatedAt,
+		Result:      lastSnapshot.UnrealizedPL,
+		History:     []PositionHistoryItem{},
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(detail)
+}
+
+func handleDecisions(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	decisions, err := GetRecentDecisions(168)
+	if err != nil {
+		http.Error(w, "Failed to get decisions", http.StatusInternalServerError)
+		return
+	}
+
+	grouped := make(map[string][]map[string]interface{})
+
+	for _, decision := range decisions {
+		item := map[string]interface{}{
+			"id":            decision.ID,
+			"symbol":        decision.Symbol,
+			"position_uuid": decision.PositionUUID,
+			"decision":      decision.FinalDecision,
+			"btc_ichimoku":  decision.BTCIchimoku,
+			"coin_ichimoku": decision.CoinIchimoku,
+			"activity":      decision.Activity,
+			"fud_activity":  decision.FudActivity,
+			"sentiment":     decision.Sentiment,
+			"fud_attack":    decision.FudAttack,
+			"explanation":   decision.DecisionExplanation,
+			"created_at":    decision.CreatedAt,
+		}
+		grouped[decision.Symbol] = append(grouped[decision.Symbol], item)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"decisions": grouped,
+	})
+}
+
+func handleDecisionDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		http.Error(w, "Decision ID required", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		http.Error(w, "Invalid decision ID", http.StatusBadRequest)
+		return
+	}
+
+	decision, err := GetDecisionByID(uint(id))
+	if err != nil {
+		http.Error(w, "Decision not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(decision)
 }
 
 func init() {
@@ -303,6 +408,116 @@ func generateBalanceHistory() {
 			Balance:   balance,
 		})
 	}
+}
+
+func handlePositionSnapshotsHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	snapshots, err := GetClosedPositionSnapshots(168)
+	if err != nil {
+		http.Error(w, "Failed to get position history", http.StatusInternalServerError)
+		return
+	}
+
+	type PositionHistoryItem struct {
+		PositionUUID string    `json:"position_uuid"`
+		Symbol       string    `json:"symbol"`
+		Side         string    `json:"side"`
+		OpenedAt     time.Time `json:"opened_at"`
+		ClosedAt     time.Time `json:"closed_at"`
+		EntryPrice   float64   `json:"entry_price"`
+		ExitPrice    float64   `json:"exit_price"`
+		FinalPL      float64   `json:"final_pl"`
+		Reason       string    `json:"reason"`
+	}
+
+	history := make([]PositionHistoryItem, len(snapshots))
+	for i, snap := range snapshots {
+		history[i] = PositionHistoryItem{
+			PositionUUID: snap.PositionUUID,
+			Symbol:       snap.Symbol,
+			Side:         snap.Side,
+			OpenedAt:     snap.PositionOpenedAt,
+			ClosedAt:     snap.CreatedAt,
+			EntryPrice:   snap.EntryPrice,
+			ExitPrice:    snap.MarkPrice,
+			FinalPL:      snap.UnrealizedPL,
+			Reason:       "",
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"positions": history,
+	})
+}
+
+func handlePositionDecisions(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	positionUUID := r.URL.Query().Get("position_uuid")
+	if positionUUID == "" {
+		http.Error(w, "Position UUID required", http.StatusBadRequest)
+		return
+	}
+
+	decisions, err := GetDecisionsByPositionUUID(positionUUID)
+	if err != nil {
+		log.Printf("Failed to get decisions for position %s: %v", positionUUID, err)
+		decisions = []TradingDecisionRecord{}
+	}
+
+	type DecisionItem struct {
+		ID                  uint      `json:"id"`
+		Symbol              string    `json:"symbol"`
+		BTCIchimoku         string    `json:"btc_ichimoku"`
+		CoinIchimoku        string    `json:"coin_ichimoku"`
+		Activity            string    `json:"activity"`
+		FudActivity         string    `json:"fud_activity"`
+		Sentiment           string    `json:"sentiment"`
+		FudAttack           string    `json:"fud_attack"`
+		FinalDecision       string    `json:"final_decision"`
+		DecisionExplanation string    `json:"decision_explanation"`
+		CreatedAt           time.Time `json:"created_at"`
+	}
+
+	decisionItems := make([]DecisionItem, len(decisions))
+	for i, d := range decisions {
+		decisionItems[i] = DecisionItem{
+			ID:                  d.ID,
+			Symbol:              d.Symbol,
+			BTCIchimoku:         d.BTCIchimoku,
+			CoinIchimoku:        d.CoinIchimoku,
+			Activity:            d.Activity,
+			FudActivity:         d.FudActivity,
+			Sentiment:           d.Sentiment,
+			FudAttack:           d.FudAttack,
+			FinalDecision:       d.FinalDecision,
+			DecisionExplanation: d.DecisionExplanation,
+			CreatedAt:           d.CreatedAt,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"decisions": decisionItems,
+	})
 }
 
 func generatePositionsHistory() {
