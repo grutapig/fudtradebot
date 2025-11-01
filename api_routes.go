@@ -386,22 +386,25 @@ func handlePositions(w http.ResponseWriter, r *http.Request) {
 	allPositions := append(openPositions, closedPositions...)
 
 	type PositionItem struct {
-		UUID             string     `json:"uuid"`
-		Symbol           string     `json:"symbol"`
-		Side             string     `json:"side"`
-		Leverage         int        `json:"leverage"`
-		Quantity         float64    `json:"quantity"`
-		EntryPrice       float64    `json:"entry_price"`
-		OpenedAt         time.Time  `json:"opened_at"`
-		IsClosed         bool       `json:"is_closed"`
-		ClosedAt         *time.Time `json:"closed_at"`
-		ClosePrice       float64    `json:"close_price"`
-		RealizedPL       float64    `json:"realized_pl"`
-		CurrentPnL       float64    `json:"current_pnl"`
-		CurrentMarkPrice float64    `json:"current_mark_price"`
-		Duration         int64      `json:"duration"`
-		OpenReason       string     `json:"open_reason"`
-		CloseReason      string     `json:"close_reason"`
+		UUID              string     `json:"uuid"`
+		Symbol            string     `json:"symbol"`
+		Side              string     `json:"side"`
+		Leverage          int        `json:"leverage"`
+		Quantity          float64    `json:"quantity"`
+		EntryPrice        float64    `json:"entry_price"`
+		OpenedAt          time.Time  `json:"opened_at"`
+		IsClosed          bool       `json:"is_closed"`
+		ClosedAt          *time.Time `json:"closed_at"`
+		ClosePrice        float64    `json:"close_price"`
+		RealizedPL        float64    `json:"realized_pl"`
+		CurrentPnL        float64    `json:"current_pnl"`
+		CurrentPnLPercent float64    `json:"current_pnl_percent"`
+		CurrentMarkPrice  float64    `json:"current_mark_price"`
+		MaxPnL            float64    `json:"max_pnl"`
+		MinPnL            float64    `json:"min_pnl"`
+		Duration          int64      `json:"duration"`
+		OpenReason        string     `json:"open_reason"`
+		CloseReason       string     `json:"close_reason"`
 	}
 
 	positions := make([]PositionItem, len(allPositions))
@@ -410,49 +413,102 @@ func handlePositions(w http.ResponseWriter, r *http.Request) {
 	var totalLossPositions float64
 	var totalLongPositions float64
 	var totalShortPositions float64
+	var totalInitialMargin float64
+	var totalLongInitialMargin float64
+	var totalShortInitialMargin float64
+	var totalProfitInitialMargin float64
+	var totalLossInitialMargin float64
 
 	for i, p := range allPositions {
+		pnlPercent := 0.0
+		initialMargin := 0.0
+		if p.Quantity > 0 && p.Leverage > 0 && p.EntryPrice > 0 {
+			initialMargin = (p.EntryPrice * p.Quantity) / float64(p.Leverage)
+			if initialMargin > 0 {
+				pnlPercent = (p.CurrentPnL / initialMargin) * 100
+			}
+		}
+
+		totalInitialMargin += initialMargin
+
 		positions[i] = PositionItem{
-			UUID:             p.UUID,
-			Symbol:           p.Symbol,
-			Side:             p.Side,
-			Leverage:         p.Leverage,
-			Quantity:         p.Quantity,
-			EntryPrice:       p.EntryPrice,
-			OpenedAt:         p.OpenedAt,
-			IsClosed:         p.IsClosed,
-			ClosedAt:         p.ClosedAt,
-			ClosePrice:       p.ClosePrice,
-			RealizedPL:       p.RealizedPL,
-			CurrentPnL:       p.CurrentPnL,
-			CurrentMarkPrice: p.CurrentMarkPrice,
-			Duration:         p.Duration,
-			OpenReason:       p.OpenReason,
-			CloseReason:      p.CloseReason,
+			UUID:              p.UUID,
+			Symbol:            p.Symbol,
+			Side:              p.Side,
+			Leverage:          p.Leverage,
+			Quantity:          p.Quantity,
+			EntryPrice:        p.EntryPrice,
+			OpenedAt:          p.OpenedAt,
+			IsClosed:          p.IsClosed,
+			ClosedAt:          p.ClosedAt,
+			ClosePrice:        p.ClosePrice,
+			RealizedPL:        p.RealizedPL,
+			CurrentPnL:        p.CurrentPnL,
+			CurrentPnLPercent: pnlPercent,
+			CurrentMarkPrice:  p.CurrentMarkPrice,
+			MaxPnL:            p.MaxPnL,
+			MinPnL:            p.MinPnL,
+			Duration:          p.Duration,
+			OpenReason:        p.OpenReason,
+			CloseReason:       p.CloseReason,
 		}
 
 		pnl := p.CurrentPnL
 		if pnl >= 0 {
 			totalProfitPositions += pnl
+			totalProfitInitialMargin += initialMargin
 		} else {
 			totalLossPositions += pnl
+			totalLossInitialMargin += initialMargin
 		}
 
 		if p.Side == "LONG" {
 			totalLongPositions += pnl
+			totalLongInitialMargin += initialMargin
 		} else if p.Side == "SHORT" {
 			totalShortPositions += pnl
+			totalShortInitialMargin += initialMargin
 		}
+	}
+
+	totalPnLPercent := 0.0
+	if totalInitialMargin > 0 {
+		totalPnLPercent = ((totalProfitPositions + totalLossPositions) / totalInitialMargin) * 100
+	}
+
+	totalProfitPercent := 0.0
+	if totalProfitInitialMargin > 0 {
+		totalProfitPercent = (totalProfitPositions / totalProfitInitialMargin) * 100
+	}
+
+	totalLossPercent := 0.0
+	if totalLossInitialMargin > 0 {
+		totalLossPercent = (totalLossPositions / totalLossInitialMargin) * 100
+	}
+
+	totalLongPercent := 0.0
+	if totalLongInitialMargin > 0 {
+		totalLongPercent = (totalLongPositions / totalLongInitialMargin) * 100
+	}
+
+	totalShortPercent := 0.0
+	if totalShortInitialMargin > 0 {
+		totalShortPercent = (totalShortPositions / totalShortInitialMargin) * 100
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"positions":              positions,
-		"total_profit_positions": totalProfitPositions,
-		"total_loss_positions":   totalLossPositions,
-		"total_pnl":              totalProfitPositions + totalLossPositions,
-		"total_long_pnl":         totalLongPositions,
-		"total_short_pnl":        totalShortPositions,
+		"positions":               positions,
+		"total_profit_positions":  totalProfitPositions,
+		"total_loss_positions":    totalLossPositions,
+		"total_pnl":               totalProfitPositions + totalLossPositions,
+		"total_long_pnl":          totalLongPositions,
+		"total_short_pnl":         totalShortPositions,
+		"total_pnl_percent":       totalPnLPercent,
+		"total_profit_percent":    totalProfitPercent,
+		"total_loss_percent":      totalLossPercent,
+		"total_long_pnl_percent":  totalLongPercent,
+		"total_short_pnl_percent": totalShortPercent,
 	})
 }
 
@@ -613,7 +669,7 @@ func handlePnLHistory(w http.ResponseWriter, r *http.Request) {
 		CumulativePnL float64 `json:"cumulative_pnl"`
 	}
 
-	cumulative := 0.0
+	cumulative := 50.0
 	result := make([]PnLPoint, 0)
 	for _, key := range keys {
 		cumulative += hourlyMap[key]

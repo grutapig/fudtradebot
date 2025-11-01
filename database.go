@@ -4,6 +4,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"log"
 	"time"
 )
 
@@ -65,6 +66,8 @@ type PositionRecord struct {
 	RealizedPL       float64
 	CurrentPnL       float64
 	CurrentMarkPrice float64
+	MaxPnL           float64 `gorm:"column:max_pnl"`
+	MinPnL           float64 `gorm:"column:min_pnl"`
 	Duration         int64
 	OpenReason       string
 	CloseReason      string
@@ -168,6 +171,10 @@ func SavePositionSnapshot(position Position, markPrice float64, positionUUID str
 		CreatedAt:        time.Now(),
 	}
 	if err := DB.Create(&snapshot).Error; err != nil {
+		return err
+	}
+
+	if err := UpdatePositionMaxMinPnL(positionUUID, position.UnrealizedPL); err != nil {
 		return err
 	}
 
@@ -342,6 +349,8 @@ func UpdatePositionClose(uuid string, closePrice float64, realizedPL float64, cl
 
 	duration := closedAt.Sub(position.OpenedAt).Milliseconds()
 
+	maxPnL, minPnL := GetMaxMinPnLFromSnapshots(uuid)
+
 	return DB.Model(&PositionRecord{}).
 		Where("uuid = ?", uuid).
 		Updates(map[string]interface{}{
@@ -351,7 +360,75 @@ func UpdatePositionClose(uuid string, closePrice float64, realizedPL float64, cl
 			"realized_pl":  realizedPL,
 			"duration":     duration,
 			"close_reason": closeReason,
+			"max_pnl":      maxPnL,
+			"min_pnl":      minPnL,
 		}).Error
+}
+
+func GetMaxMinPnLFromSnapshots(uuid string) (float64, float64) {
+	var maxPnL, minPnL float64
+
+	DB.Model(&PositionSnapshot{}).
+		Where("position_uuid = ?", uuid).
+		Select("COALESCE(MAX(unrealized_pl), 0)").
+		Row().Scan(&maxPnL)
+
+	DB.Model(&PositionSnapshot{}).
+		Where("position_uuid = ?", uuid).
+		Select("COALESCE(MIN(unrealized_pl), 0)").
+		Row().Scan(&minPnL)
+
+	return maxPnL, minPnL
+}
+
+func UpdatePositionMaxMinPnL(uuid string, currentPnL float64) error {
+	var position PositionRecord
+	if err := DB.Where("uuid = ?", uuid).First(&position).Error; err != nil {
+		return err
+	}
+
+	updates := make(map[string]interface{})
+
+	if currentPnL > position.MaxPnL {
+		updates["max_pnl"] = currentPnL
+	}
+
+	if currentPnL < position.MinPnL || position.MinPnL == 0 {
+		updates["min_pnl"] = currentPnL
+	}
+
+	if len(updates) > 0 {
+		return DB.Model(&PositionRecord{}).Where("uuid = ?", uuid).Updates(updates).Error
+	}
+
+	return nil
+}
+
+func BackfillMaxMinPnL() error {
+	var positions []PositionRecord
+	if err := DB.Find(&positions).Error; err != nil {
+		return err
+	}
+	filled := 0
+	for _, position := range positions {
+		var snapshotCount int64
+		DB.Model(&PositionSnapshot{}).Where("position_uuid = ?", position.UUID).Count(&snapshotCount)
+		if snapshotCount > 0 && position.MaxPnL == 0 && position.MinPnL == 0 {
+			maxPnL, minPnL := GetMaxMinPnLFromSnapshots(position.UUID)
+			err := DB.Model(&PositionRecord{}).
+				Where("uuid = ?", position.UUID).
+				Updates(map[string]interface{}{
+					"max_pnl": maxPnL,
+					"min_pnl": minPnL,
+				}).Error
+			if err != nil {
+				log.Println("cannot update max pnl ont start app for", position.Symbol, position, maxPnL, minPnL)
+			}
+			filled++
+		}
+
+	}
+	return nil
 }
 
 func GetPositionByUUID(uuid string) (PositionRecord, error) {

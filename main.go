@@ -41,6 +41,13 @@ func main() {
 	if err := InitDatabase(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
+
+	log.Println("Backfilling Max/Min P/L for existing positions...")
+	if err := BackfillMaxMinPnL(); err != nil {
+		log.Printf("Warning: Failed to backfill Max/Min P/L: %v", err)
+	} else {
+		log.Println("Max/Min P/L backfill completed")
+	}
 	log.Println("Database initialized successfully")
 
 	go StartWebServer()
@@ -193,6 +200,8 @@ func runTradingLoop(exchange AsterDexExchange, activityClient ExternalActivityCl
 				EntryPrice: position.EntryPrice,
 				OpenedAt:   position.Timestamp,
 				OpenReason: "restored_from_exchange",
+				MaxPnL:     position.UnrealizedPL,
+				MinPnL:     position.UnrealizedPL,
 				CreatedAt:  time.Now(),
 			}
 			if err := SavePositionOpen(positionRecord); err != nil {
@@ -450,6 +459,8 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 				EntryPrice: position.EntryPrice,
 				OpenedAt:   state.OpenedAt,
 				OpenReason: "fud_attack_forced",
+				MaxPnL:     position.UnrealizedPL,
+				MinPnL:     position.UnrealizedPL,
 				CreatedAt:  time.Now(),
 			}
 			if err := SavePositionOpen(positionRecord); err != nil {
@@ -620,6 +631,8 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		EntryPrice: position.EntryPrice,
 		OpenedAt:   state.OpenedAt,
 		OpenReason: decision.Reason,
+		MaxPnL:     position.UnrealizedPL,
+		MinPnL:     position.UnrealizedPL,
 		CreatedAt:  time.Now(),
 	}
 	if err := SavePositionOpen(positionRecord); err != nil {
