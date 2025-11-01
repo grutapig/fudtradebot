@@ -360,6 +360,12 @@ func GetPositionByUUID(uuid string) (PositionRecord, error) {
 	return position, err
 }
 
+func GetOpenPositionBySymbolAndSide(symbol string, side string) (PositionRecord, error) {
+	var position PositionRecord
+	err := DB.Where("symbol = ? AND side = ? AND is_closed = ?", symbol, side, false).First(&position).Error
+	return position, err
+}
+
 func GetOpenPositions() ([]PositionRecord, error) {
 	var positions []PositionRecord
 	err := DB.Where("is_closed = ?", false).Find(&positions).Error

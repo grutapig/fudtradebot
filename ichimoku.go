@@ -282,3 +282,63 @@ func minSlice(values []float64) float64 {
 	}
 	return min
 }
+
+func ShouldClosePosition(positionSide PositionSide, ichimokuResult IchimokuResult) bool {
+	n := len(ichimokuResult.Data.Price)
+	if n < 2 {
+		return false
+	}
+
+	currentPrice := ichimokuResult.Data.Price[n-1].Value
+	currentKijun := ichimokuResult.Data.Kijun[n-1].Value
+	currentTenkan := ichimokuResult.Data.Tenkan[n-1].Value
+
+	currentCloudTop := math.Max(
+		ichimokuResult.Data.SenkouA[n-1].Value,
+		ichimokuResult.Data.SenkouB[n-1].Value,
+	)
+	currentCloudBottom := math.Min(
+		ichimokuResult.Data.SenkouA[n-1].Value,
+		ichimokuResult.Data.SenkouB[n-1].Value,
+	)
+
+	if positionSide == PositionSideLong {
+		return shouldCloseLongPosition(currentPrice, currentKijun, currentTenkan, currentCloudTop, currentCloudBottom)
+	} else if positionSide == PositionSideShort {
+		return shouldCloseShortPosition(currentPrice, currentKijun, currentTenkan, currentCloudTop, currentCloudBottom)
+	}
+
+	return false
+}
+
+func shouldCloseLongPosition(price, kijun, tenkan, cloudTop, cloudBottom float64) bool {
+	if price < kijun {
+		return true
+	}
+
+	if price <= cloudTop && price >= cloudBottom {
+		return true
+	}
+
+	if tenkan < kijun {
+		return true
+	}
+
+	return false
+}
+
+func shouldCloseShortPosition(price, kijun, tenkan, cloudTop, cloudBottom float64) bool {
+	if price > kijun {
+		return true
+	}
+
+	if price <= cloudTop && price >= cloudBottom {
+		return true
+	}
+
+	if tenkan > kijun {
+		return true
+	}
+
+	return false
+}

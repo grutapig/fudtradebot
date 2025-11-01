@@ -160,6 +160,32 @@ func runTradingLoop(exchange AsterDexExchange, activityClient ExternalActivityCl
 			pair.Symbol, position.Side, position.Timestamp.Format("2006-01-02 15:04:05"))
 		log.Printf("[%s]   Entry price: %.6f, Amount: %.6f, P/L: %.2f USDT",
 			pair.Symbol, position.EntryPrice, position.Amount, position.UnrealizedPL)
+
+		dbPosition, err := GetOpenPositionBySymbolAndSide(pair.Symbol, string(position.Side))
+		if err == nil {
+			state.PositionUUID = dbPosition.UUID
+			log.Printf("[%s] ✓ Imported position UUID from database: %s", pair.Symbol, state.PositionUUID)
+		} else {
+			state.PositionUUID = GeneratePositionUUID()
+			log.Printf("[%s] ✓ Generated new position UUID: %s", pair.Symbol, state.PositionUUID)
+
+			positionRecord := PositionRecord{
+				UUID:       state.PositionUUID,
+				Symbol:     pair.Symbol,
+				Side:       string(position.Side),
+				Leverage:   pair.Leverage,
+				Quantity:   pair.Quantity,
+				EntryPrice: position.EntryPrice,
+				OpenedAt:   position.Timestamp,
+				OpenReason: "restored_from_exchange",
+				CreatedAt:  time.Now(),
+			}
+			if err := SavePositionOpen(positionRecord); err != nil {
+				log.Printf("[%s] Failed to save restored position to database: %v", pair.Symbol, err)
+			} else {
+				log.Printf("[%s] Restored position saved to database", pair.Symbol)
+			}
+		}
 	} else {
 		log.Printf("[%s] ✓ No existing position found, starting fresh", pair.Symbol)
 	}
@@ -470,9 +496,10 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		}
 	}
 
-	if decision.Signal == SignalEmpty {
-		if state.CurrentPosition != PositionSideBoth {
-			log.Printf("[%s] No signal - closing existing position", pair.Symbol)
+	if state.CurrentPosition != PositionSideBoth {
+		shouldClose := ShouldClosePosition(state.CurrentPosition, coinIchimoku)
+		if shouldClose {
+			log.Printf("[%s] Ichimoku signals to close %s position", pair.Symbol, state.CurrentPosition)
 
 			var closedPosition *Position
 			if state.CurrentPosition == PositionSideLong {
@@ -495,7 +522,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 				if closedPosition != nil {
 					realizedPL = closedPosition.UnrealizedPL
 				}
-				if err := UpdatePositionClose(state.PositionUUID, markPrice, realizedPL, "no_signal"); err != nil {
+				if err := UpdatePositionClose(state.PositionUUID, markPrice, realizedPL, "ichimoku_exit"); err != nil {
 					log.Printf("[%s] Failed to update position close: %v", pair.Symbol, err)
 				} else {
 					log.Printf("[%s] Position close recorded in database", pair.Symbol)
@@ -504,11 +531,16 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 
 			state.CurrentPosition = PositionSideBoth
 			state.PositionUUID = ""
-			log.Printf("[%s] Position closed", pair.Symbol)
+			state.OpenReason = ""
+			log.Printf("[%s] Position closed by Ichimoku exit signal", pair.Symbol)
 		} else {
-			log.Printf("[%s] No signal - no action", pair.Symbol)
+			log.Printf("[%s] Position held - Ichimoku conditions not met for exit", pair.Symbol)
 		}
-		state.OpenReason = ""
+		return nil
+	}
+
+	if decision.Signal == SignalEmpty {
+		log.Printf("[%s] No signal - no action", pair.Symbol)
 		return nil
 	}
 
@@ -522,33 +554,6 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	if state.CurrentPosition == desiredPosition {
 		log.Printf("[%s] Position already matches signal - holding", pair.Symbol)
 		return nil
-	}
-
-	if state.CurrentPosition != PositionSideBoth {
-		log.Printf("[%s] Closing existing %s position", pair.Symbol, state.CurrentPosition)
-
-		if err := exchange.ClosePosition(pair.Symbol, state.CurrentPosition); err != nil {
-			log.Printf("[%s] Failed to close position: %v", pair.Symbol, err)
-			return err
-		}
-
-		if state.PositionUUID != "" {
-			markPrice, _ := exchange.GetMarkPrice(pair.Symbol)
-			closedPosition, _ := exchange.GetPosition(pair.Symbol)
-			realizedPL := 0.0
-			if closedPosition != nil {
-				realizedPL = closedPosition.UnrealizedPL
-			}
-			if err := UpdatePositionClose(state.PositionUUID, markPrice, realizedPL, "switch_position"); err != nil {
-				log.Printf("[%s] Failed to update position close: %v", pair.Symbol, err)
-			} else {
-				log.Printf("[%s] Position close recorded in database", pair.Symbol)
-			}
-		}
-
-		state.CurrentPosition = PositionSideBoth
-		state.OpenReason = ""
-		state.PositionUUID = ""
 	}
 
 	log.Printf("[%s] Opening %s position", pair.Symbol, desiredPosition)

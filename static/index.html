@@ -15,8 +15,8 @@
 
         body {
             font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
-            color: #00ff88;
+            background: linear-gradient(135deg, #1a1408 0%, #2d2415 50%, #1a1408 100%);
+            color: #d4af37;
             min-height: 100vh;
             padding: 20px;
         }
@@ -29,30 +29,37 @@
         .header {
             text-align: center;
             padding: 30px;
-            background: rgba(10, 14, 39, 0.8);
-            border: 2px solid #00ff88;
+            background: rgba(25, 20, 10, 0.9);
+            border: 3px solid #d4af37;
             border-radius: 15px;
             margin-bottom: 30px;
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 40px rgba(212, 175, 55, 0.4), inset 0 0 20px rgba(255, 215, 0, 0.1);
         }
 
         h1 {
-            font-size: 2.5em;
-            text-shadow: 0 0 20px #00ff88;
+            font-size: 3em;
+            background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #ffed4e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 2px 10px rgba(255, 215, 0, 0.5);
             margin-bottom: 10px;
+            letter-spacing: 2px;
+            font-weight: bold;
+            filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6));
         }
 
         .chart-container {
-            background: rgba(10, 14, 39, 0.9);
-            border: 2px solid #00ff88;
+            background: rgba(25, 20, 10, 0.9);
+            border: 2px solid #b8941e;
             border-radius: 15px;
             padding: 30px;
             margin-bottom: 30px;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 25px rgba(184, 148, 30, 0.3);
         }
 
         .chart-title {
-            color: #00ccff;
+            color: #ffd700;
             font-size: 1.5em;
             margin-bottom: 20px;
             text-align: center;
@@ -63,7 +70,7 @@
         }
 
         .result-positive {
-            color: #00ff88;
+            color: #7fb800;
         }
 
         .result-negative {
@@ -90,15 +97,15 @@
         }
 
         .modal-content {
-            background: rgba(10, 14, 39, 0.98);
-            border: 2px solid #00ff88;
+            background: rgba(25, 20, 10, 0.98);
+            border: 2px solid #d4af37;
             border-radius: 15px;
             padding: 30px;
             max-width: 900px;
             width: 100%;
             max-height: 90vh;
             overflow-y: auto;
-            box-shadow: 0 0 50px rgba(0, 255, 136, 0.5);
+            box-shadow: 0 0 50px rgba(212, 175, 55, 0.5);
         }
 
         .modal-header {
@@ -107,12 +114,12 @@
             align-items: center;
             margin-bottom: 25px;
             padding-bottom: 15px;
-            border-bottom: 2px solid #00ccff;
+            border-bottom: 2px solid #b8941e;
         }
 
         .modal-title {
             font-size: 1.8em;
-            color: #00ff88;
+            color: #ffd700;
         }
 
         .close-btn {
@@ -135,7 +142,7 @@
         }
 
         .section-title {
-            color: #00ccff;
+            color: #ffd700;
             font-size: 1.3em;
             margin-bottom: 15px;
             text-transform: uppercase;
@@ -150,10 +157,10 @@
         }
 
         .info-item {
-            background: rgba(0, 204, 255, 0.1);
+            background: rgba(184, 148, 30, 0.1);
             padding: 12px;
             border-radius: 8px;
-            border: 1px solid #00ccff;
+            border: 1px solid #b8941e;
         }
 
         .info-label {
@@ -163,14 +170,14 @@
         }
 
         .info-value {
-            color: #00ff88;
+            color: #d4af37;
             font-size: 1.2em;
             font-weight: bold;
         }
 
         .history-item {
-            background: rgba(0, 204, 255, 0.05);
-            border: 1px solid #00ccff;
+            background: rgba(184, 148, 30, 0.05);
+            border: 1px solid #b8941e;
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 15px;
@@ -185,7 +192,7 @@
 
         .history-action {
             font-size: 1.1em;
-            color: #00ff88;
+            color: #a89968;
             font-weight: bold;
             text-transform: uppercase;
         }
@@ -196,7 +203,7 @@
         }
 
         .history-reason {
-            color: #00ccff;
+            color: #b8941e;
             margin-bottom: 15px;
             line-height: 1.5;
         }
@@ -209,10 +216,10 @@
         }
 
         .trend-item {
-            background: rgba(10, 14, 39, 0.8);
+            background: rgba(25, 20, 10, 0.8);
             padding: 12px;
             border-radius: 8px;
-            border: 1px solid #00ccff;
+            border: 1px solid #b8941e;
             text-align: center;
         }
 
@@ -227,9 +234,9 @@
             font-weight: bold;
         }
 
-        .trend-up { color: #00ff88; }
+        .trend-up { color: #7fb800; }
         .trend-down { color: #ff4444; }
-        .trend-flat { color: #ffaa00; }
+        .trend-flat { color: #d4af37; }
 
         ::-webkit-scrollbar {
             width: 8px;
@@ -240,19 +247,19 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: rgba(0, 255, 136, 0.5);
+            background: rgba(212, 175, 55, 0.5);
             border-radius: 4px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 255, 136, 0.7);
+            background: rgba(212, 175, 55, 0.7);
         }
 
         .loading {
             text-align: center;
             padding: 50px;
             font-size: 1.5em;
-            color: #00ccff;
+            color: #d4af37;
         }
 
         .decisions-container {
@@ -265,20 +272,20 @@
         }
 
         .decision-group {
-            background: rgba(0, 204, 255, 0.05);
-            border: 1px solid #00ccff;
+            background: rgba(184, 148, 30, 0.05);
+            border: 1px solid #b8941e;
             border-radius: 10px;
             padding: 15px;
         }
 
         .decision-group-header {
-            color: #00ff88;
+            color: #d4af37;
             font-size: 1.2em;
             font-weight: bold;
             margin-bottom: 15px;
             text-align: center;
             padding-bottom: 10px;
-            border-bottom: 2px solid #00ccff;
+            border-bottom: 2px solid #b8941e;
         }
 
         .decision-list {
@@ -288,8 +295,8 @@
         }
 
         .decision-item {
-            background: rgba(10, 14, 39, 0.8);
-            border: 1px solid #00ccff;
+            background: rgba(25, 20, 10, 0.8);
+            border: 1px solid #b8941e;
             border-radius: 8px;
             padding: 12px;
             cursor: pointer;
@@ -297,7 +304,7 @@
         }
 
         .decision-item:hover {
-            background: rgba(0, 204, 255, 0.15);
+            background: rgba(184, 148, 30, 0.15);
             transform: translateX(5px);
         }
 
@@ -322,9 +329,9 @@
         }
 
         .badge-long {
-            background: rgba(0, 255, 136, 0.3);
-            border: 1px solid #00ff88;
-            color: #00ff88;
+            background: rgba(127, 184, 0, 0.3);
+            border: 1px solid #7fb800;
+            color: #9fd936;
         }
 
         .badge-short {
@@ -353,8 +360,8 @@
         }
 
         .signal-bg-long {
-            background: rgba(0, 255, 136, 0.3);
-            border-color: #00ff88;
+            background: rgba(127, 184, 0, 0.3);
+            border-color: #7fb800;
         }
 
         .signal-bg-short {
@@ -378,11 +385,11 @@
         }
 
         .explanation-text {
-            background: rgba(0, 204, 255, 0.1);
+            background: rgba(184, 148, 30, 0.1);
             padding: 15px;
             border-radius: 8px;
-            border: 1px solid #00ccff;
-            color: #00ff88;
+            border: 1px solid #b8941e;
+            color: #d4af37;
             line-height: 1.6;
         }
 
@@ -394,8 +401,8 @@
         }
 
         .position-card {
-            background: rgba(0, 204, 255, 0.05);
-            border: 2px solid #00ccff;
+            background: rgba(184, 148, 30, 0.05);
+            border: 2px solid #b8941e;
             border-radius: 12px;
             padding: 20px;
             cursor: pointer;
@@ -405,15 +412,15 @@
 
         .position-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+            box-shadow: 0 10px 30px rgba(212, 175, 55, 0.3);
         }
 
-        .position-long {
-            border-color: #00ff88;
-            background: rgba(0, 255, 136, 0.05);
+        .position-profit {
+            border-color: #7fb800;
+            background: rgba(127, 184, 0, 0.05);
         }
 
-        .position-short {
+        .position-loss {
             border-color: #ff4444;
             background: rgba(255, 68, 68, 0.05);
         }
@@ -424,13 +431,13 @@
             align-items: center;
             margin-bottom: 15px;
             padding-bottom: 12px;
-            border-bottom: 1px solid rgba(0, 204, 255, 0.3);
+            border-bottom: 1px solid rgba(184, 148, 30, 0.3);
         }
 
         .position-symbol {
             font-size: 1.4em;
             font-weight: bold;
-            color: #00ff88;
+            color: #d4af37;
         }
 
         .position-side-badge {
@@ -442,9 +449,9 @@
         }
 
         .position-side-badge.long {
-            background: rgba(0, 255, 136, 0.3);
-            border: 1px solid #00ff88;
-            color: #00ff88;
+            background: rgba(127, 184, 0, 0.3);
+            border: 1px solid #7fb800;
+            color: #9fd936;
         }
 
         .position-side-badge.short {
@@ -461,7 +468,7 @@
             display: flex;
             justify-content: space-between;
             padding: 8px 0;
-            border-bottom: 1px solid rgba(0, 204, 255, 0.1);
+            border-bottom: 1px solid rgba(184, 148, 30, 0.1);
         }
 
         .position-info-row .label {
@@ -470,7 +477,7 @@
         }
 
         .position-info-row .value {
-            color: #00ccff;
+            color: #b8941e;
             font-weight: bold;
         }
 
@@ -490,10 +497,10 @@
         }
 
         .status-open {
-            color: #00ff88;
+            color: #9fd936;
             font-weight: bold;
             padding: 4px 12px;
-            background: rgba(0, 255, 136, 0.2);
+            background: rgba(127, 184, 0, 0.2);
             border-radius: 6px;
         }
 
@@ -522,8 +529,8 @@
         }
 
         .decision-card {
-            background: rgba(0, 204, 255, 0.05);
-            border: 1px solid #00ccff;
+            background: rgba(184, 148, 30, 0.05);
+            border: 1px solid #b8941e;
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 12px;
@@ -531,8 +538,8 @@
 
         .decision-number {
             display: inline-block;
-            background: rgba(0, 255, 136, 0.3);
-            color: #00ff88;
+            background: rgba(212, 175, 55, 0.3);
+            color: #d4af37;
             padding: 4px 10px;
             border-radius: 6px;
             font-weight: bold;
@@ -551,15 +558,15 @@
             gap: 10px;
             margin-bottom: 15px;
             padding: 15px;
-            background: rgba(0, 204, 255, 0.05);
+            background: rgba(184, 148, 30, 0.05);
             border-radius: 8px;
         }
 
         .chart-toggle {
             padding: 8px 16px;
-            border: 2px solid #00ccff;
-            background: rgba(0, 204, 255, 0.1);
-            color: #00ccff;
+            border: 2px solid #b8941e;
+            background: rgba(184, 148, 30, 0.1);
+            color: #b8941e;
             border-radius: 6px;
             cursor: pointer;
             transition: all 0.3s;
@@ -567,13 +574,13 @@
         }
 
         .chart-toggle.active {
-            background: rgba(0, 255, 136, 0.3);
-            border-color: #00ff88;
-            color: #00ff88;
+            background: rgba(212, 175, 55, 0.3);
+            border-color: #d4af37;
+            color: #d4af37;
         }
 
         .chart-toggle:hover {
-            background: rgba(0, 204, 255, 0.2);
+            background: rgba(184, 148, 30, 0.2);
         }
     </style>
 </head>
@@ -581,7 +588,7 @@
     <div id="app">
         <div class="container">
             <div class="header">
-                <h1>📊 FUD Trading Bot Dashboard</h1>
+                <h1>📊 GRUTA AI trading bot dashboard</h1>
             </div>
 
             <div v-if="loading" class="loading">
@@ -592,8 +599,8 @@
                 <div class="chart-container">
                     <div class="chart-title">Account Balance History</div>
                     <div class="chart-controls">
-                        <label style="color: #00ccff; margin-right: 15px;">Asset:</label>
-                        <select v-model="selectedAsset" @change="onAssetChange" style="padding: 8px 16px; border: 2px solid #00ccff; background: rgba(0, 204, 255, 0.1); color: #00ccff; border-radius: 6px; cursor: pointer; font-family: 'Courier New', monospace;">
+                        <label style="color: #d4af37; margin-right: 15px;">Asset:</label>
+                        <select v-model="selectedAsset" @change="onAssetChange" style="padding: 8px 16px; border: 2px solid #b8941e; background: rgba(184, 148, 30, 0.1); color: #d4af37; border-radius: 6px; cursor: pointer; font-family: 'Courier New', monospace;">
                             <option v-for="asset in assets" :key="asset" :value="asset">{{ asset }}</option>
                         </select>
                     </div>
@@ -605,7 +612,7 @@
                     <div class="positions-container">
                         <div v-for="position in positions" :key="position.uuid" 
                              class="position-card"
-                             :class="{'position-long': position.side === 'LONG', 'position-short': position.side === 'SHORT'}"
+                             :class="getPnLBorderClass(position)"
                              @click="openPositionDetail(position.uuid)">
                             <div class="position-header">
                                 <div class="position-symbol">{{ position.symbol }}</div>
@@ -827,7 +834,7 @@
                         <div class="section-title">FUD Attack Analysis ({{ positionFudAttacks.length }})</div>
                         <div class="decisions-list">
                             <div v-for="attack in positionFudAttacks" :key="attack.id" class="decision-card" 
-                                 :style="attack.has_attack ? 'border-color: #ff4444;' : 'border-color: #00ff88;'">
+                                 :style="attack.has_attack ? 'border-color: #ff4444;' : 'border-color: #7fb800;'">
                                 <div class="decision-time">{{ formatDateTime(attack.created_at) }}</div>
                                 <div class="info-grid" style="margin-top: 10px;">
                                     <div class="info-item">
@@ -928,9 +935,9 @@
                     chart: null,
                     snapshotsChart: null,
                     snapshotMetrics: [
-                        { key: 'unrealized_pl', label: 'Unrealized P/L', visible: true, color: '#00ff88' },
-                        { key: 'mark_price', label: 'Mark Price', visible: true, color: '#00ccff' },
-                        { key: 'entry_price', label: 'Entry Price', visible: true, color: '#ffaa00' },
+                        { key: 'unrealized_pl', label: 'Unrealized P/L', visible: true, color: '#7fb800' },
+                        { key: 'mark_price', label: 'Mark Price', visible: true, color: '#b8941e' },
+                        { key: 'entry_price', label: 'Entry Price', visible: true, color: '#d4af37' },
                         { key: 'amount', label: 'Amount', visible: false, color: '#ff4444' }
                     ]
                 }
@@ -1015,8 +1022,8 @@
                                 {
                                     label: 'Available Balance',
                                     data: this.balanceHistory.map(p => p.available_balance),
-                                    borderColor: '#00ff88',
-                                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                                    borderColor: '#7fb800',
+                                    backgroundColor: 'rgba(127, 184, 0, 0.1)',
                                     borderWidth: 3,
                                     tension: 0.4,
                                     fill: true,
@@ -1031,7 +1038,7 @@
                             plugins: {
                                 legend: {
                                     labels: {
-                                        color: '#00ff88',
+                                        color: '#d4af37',
                                         font: {
                                             family: "'Courier New', monospace",
                                             size: 14
@@ -1043,7 +1050,7 @@
                                 y: {
                                     beginAtZero: false,
                                     ticks: {
-                                        color: '#00ccff',
+                                        color: '#b8941e',
                                         font: {
                                             family: "'Courier New', monospace"
                                         },
@@ -1052,12 +1059,12 @@
                                         }
                                     },
                                     grid: {
-                                        color: 'rgba(0, 204, 255, 0.2)'
+                                        color: 'rgba(184, 148, 30, 0.2)'
                                     }
                                 },
                                 x: {
                                     ticks: {
-                                        color: '#00ccff',
+                                        color: '#b8941e',
                                         font: {
                                             family: "'Courier New', monospace"
                                         },
@@ -1065,7 +1072,7 @@
                                         minRotation: 45
                                     },
                                     grid: {
-                                        color: 'rgba(0, 204, 255, 0.2)'
+                                        color: 'rgba(184, 148, 30, 0.2)'
                                     }
                                 }
                             }
@@ -1176,7 +1183,7 @@
                             plugins: {
                                 legend: {
                                     labels: {
-                                        color: '#00ff88',
+                                        color: '#d4af37',
                                         font: {
                                             family: "'Courier New', monospace",
                                             size: 12
@@ -1188,18 +1195,18 @@
                                 y: {
                                     beginAtZero: false,
                                     ticks: {
-                                        color: '#00ccff',
+                                        color: '#b8941e',
                                         font: {
                                             family: "'Courier New', monospace"
                                         }
                                     },
                                     grid: {
-                                        color: 'rgba(0, 204, 255, 0.2)'
+                                        color: 'rgba(184, 148, 30, 0.2)'
                                     }
                                 },
                                 x: {
                                     ticks: {
-                                        color: '#00ccff',
+                                        color: '#b8941e',
                                         font: {
                                             family: "'Courier New', monospace"
                                         },
@@ -1207,7 +1214,7 @@
                                         minRotation: 45
                                     },
                                     grid: {
-                                        color: 'rgba(0, 204, 255, 0.2)'
+                                        color: 'rgba(184, 148, 30, 0.2)'
                                     }
                                 }
                             }
@@ -1275,12 +1282,16 @@
                     return 'trend-flat';
                 },
                 getPnLClass(position) {
-                    const pnl = position.is_closed ? position.realized_pl : (position.current_pnl || 0);
+                    const pnl = position.current_pnl || 0;
                     return pnl >= 0 ? 'result-positive' : 'result-negative';
                 },
                 getPnLDisplay(position) {
-                    const pnl = position.is_closed ? position.realized_pl : (position.current_pnl || 0);
+                    const pnl = position.current_pnl || 0;
                     return (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+                },
+                getPnLBorderClass(position) {
+                    const pnl = position.current_pnl || 0;
+                    return pnl >= 0 ? 'position-profit' : 'position-loss';
                 }
             },
             mounted() {

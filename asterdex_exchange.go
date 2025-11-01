@@ -437,7 +437,6 @@ func (e *AsterDexExchange) GetAllBalances() ([]AccountBalanceInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get balance: %w", err)
 	}
-
 	var balances []AsterDexBalance
 	if err := json.Unmarshal(body, &balances); err != nil {
 		return nil, fmt.Errorf("failed to parse balance: %w", err)

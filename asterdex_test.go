@@ -147,3 +147,10 @@ func TestAsterDexExchange_GetKlines(t *testing.T) {
 	os.WriteFile("chart.svg", []byte(aga), 0655)
 	fmt.Printf("analyze %+v", cloud.Analysis)
 }
+func TestAsterDexExchange_GetAllBalances(t *testing.T) {
+	godotenv.Load()
+	exchange := NewAsterDexExchange(os.Getenv(ENV_DEX_KEY), os.Getenv(ENV_DEX_SECRET))
+	balances, err := exchange.GetAllBalances()
+	assert.NoError(t, err)
+	fmt.Printf("%+v\n", balances)
+}
