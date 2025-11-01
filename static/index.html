@@ -65,10 +65,6 @@
             text-align: center;
         }
 
-        #balanceChart {
-            max-height: 400px;
-        }
-
         .result-positive {
             color: #7fb800;
         }
@@ -597,18 +593,40 @@
 
             <template v-else>
                 <div class="chart-container">
-                    <div class="chart-title">Account Balance History</div>
-                    <div class="chart-controls">
-                        <label style="color: #d4af37; margin-right: 15px;">Asset:</label>
-                        <select v-model="selectedAsset" @change="onAssetChange" style="padding: 8px 16px; border: 2px solid #b8941e; background: rgba(184, 148, 30, 0.1); color: #d4af37; border-radius: 6px; cursor: pointer; font-family: 'Courier New', monospace;">
-                            <option v-for="asset in assets" :key="asset" :value="asset">{{ asset }}</option>
-                        </select>
-                    </div>
-                    <canvas id="balanceChart"></canvas>
+                    <div class="chart-title">Cumulative P/L History</div>
+                    <canvas id="pnlChart" style="max-height: 300px;"></canvas>
                 </div>
 
                 <div class="chart-container">
                     <div class="chart-title">Positions</div>
+                    <div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; font-size: 0.9em;">
+                        <span>
+                            <span style="color: #888;">Total Profit:</span>
+                            <span class="result-positive" style="font-weight: bold; margin-left: 5px;">+${{ positionsSummary.total_profit.toFixed(2) }}</span>
+                        </span>
+                        <span>
+                            <span style="color: #888;">Total Loss:</span>
+                            <span class="result-negative" style="font-weight: bold; margin-left: 5px;">${{ positionsSummary.total_loss.toFixed(2) }}</span>
+                        </span>
+                        <span>
+                            <span style="color: #888;">Total P/L:</span>
+                            <span :class="positionsSummary.total_pnl >= 0 ? 'result-positive' : 'result-negative'" style="font-weight: bold; margin-left: 5px;">
+                                {{ positionsSummary.total_pnl >= 0 ? '+' : '' }}${{ positionsSummary.total_pnl.toFixed(2) }}
+                            </span>
+                        </span>
+                        <span>
+                            <span style="color: #888;">Long P/L:</span>
+                            <span :class="positionsSummary.long_pnl >= 0 ? 'result-positive' : 'result-negative'" style="font-weight: bold; margin-left: 5px;">
+                                {{ positionsSummary.long_pnl >= 0 ? '+' : '' }}${{ positionsSummary.long_pnl.toFixed(2) }}
+                            </span>
+                        </span>
+                        <span>
+                            <span style="color: #888;">Short P/L:</span>
+                            <span :class="positionsSummary.short_pnl >= 0 ? 'result-positive' : 'result-negative'" style="font-weight: bold; margin-left: 5px;">
+                                {{ positionsSummary.short_pnl >= 0 ? '+' : '' }}${{ positionsSummary.short_pnl.toFixed(2) }}
+                            </span>
+                        </span>
+                    </div>
                     <div class="positions-container">
                         <div v-for="position in positions" :key="position.uuid" 
                              class="position-card"
@@ -920,11 +938,16 @@
             data() {
                 return {
                     loading: true,
-                    balanceHistory: [],
                     decisions: {},
                     positions: [],
-                    assets: [],
-                    selectedAsset: 'USDT',
+                    positionsSummary: {
+                        total_profit: 0,
+                        total_loss: 0,
+                        total_pnl: 0,
+                        long_pnl: 0,
+                        short_pnl: 0
+                    },
+                    pnlHistory: [],
                     showDecisionModal: false,
                     selectedDecision: null,
                     showPositionModal: false,
@@ -932,7 +955,7 @@
                     positionDecisions: [],
                     positionSnapshots: [],
                     positionFudAttacks: [],
-                    chart: null,
+                    pnlChart: null,
                     snapshotsChart: null,
                     snapshotMetrics: [
                         { key: 'unrealized_pl', label: 'Unrealized P/L', visible: true, color: '#7fb800' },
@@ -950,87 +973,81 @@
             methods: {
                 async fetchData() {
                     try {
-                        const [balanceRes, decisionsRes, positionsRes, assetsRes] = await Promise.all([
-                            fetch(`/api/balance-history?asset=${this.selectedAsset}`),
+                        const [decisionsRes, positionsRes, pnlRes] = await Promise.all([
                             fetch('/api/decisions'),
                             fetch('/api/positions'),
-                            fetch('/api/assets')
+                            fetch('/api/pnl-history')
                         ]);
 
-                        const balanceData = await balanceRes.json();
                         const decisionsData = await decisionsRes.json();
                         const positionsData = await positionsRes.json();
-                        const assetsData = await assetsRes.json();
+                        const pnlData = await pnlRes.json();
 
-                        this.balanceHistory = balanceData.history || [];
                         this.decisions = decisionsData.decisions || {};
                         this.positions = positionsData.positions || [];
-                        this.assets = assetsData.assets || ['USDT'];
-
-                        if (!this.assets.includes(this.selectedAsset) && this.assets.length > 0) {
-                            this.selectedAsset = this.assets[0];
-                        }
+                        this.positionsSummary = {
+                            total_profit: positionsData.total_profit_positions || 0,
+                            total_loss: positionsData.total_loss_positions || 0,
+                            total_pnl: positionsData.total_pnl || 0,
+                            long_pnl: positionsData.total_long_pnl || 0,
+                            short_pnl: positionsData.total_short_pnl || 0
+                        };
+                        this.pnlHistory = pnlData.history || [];
 
                         await this.$nextTick();
-                        this.renderChart();
+                        this.renderPnLChart();
                     } catch (err) {
                         console.error('Failed to fetch data:', err);
                     } finally {
                         this.loading = false;
                     }
                 },
-                async onAssetChange() {
-                    try {
-                        const response = await fetch(`/api/balance-history?asset=${this.selectedAsset}`);
-                        const data = await response.json();
-                        this.balanceHistory = data.history || [];
-                        await this.$nextTick();
-                        this.renderChart();
-                    } catch (err) {
-                        console.error('Failed to fetch balance history:', err);
-                    }
-                },
-                renderChart() {
-                    const ctx = document.getElementById('balanceChart');
+                renderPnLChart() {
+                    const ctx = document.getElementById('pnlChart');
                     
                     if (!ctx) {
-                        console.error('Canvas element not found');
+                        console.error('PnL Chart canvas not found');
                         return;
                     }
                     
-                    if (this.chart) {
-                        this.chart.destroy();
+                    if (this.pnlChart) {
+                        this.pnlChart.destroy();
                     }
 
-                    if (!this.balanceHistory || this.balanceHistory.length === 0) {
+                    if (!this.pnlHistory || this.pnlHistory.length === 0) {
                         return;
                     }
 
-                    this.chart = new Chart(ctx, {
+                    const labels = this.pnlHistory.map(p => {
+                        const date = new Date(p.timestamp);
+                        return date.toLocaleString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            hour: '2-digit'
+                        });
+                    });
+
+                    const data = this.pnlHistory.map(p => p.cumulative_pnl);
+                    const lastValue = data[data.length - 1] || 0;
+                    const isProfit = lastValue >= 0;
+
+                    this.pnlChart = new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: this.balanceHistory.map(p => {
-                                const date = new Date(p.timestamp);
-                                return date.toLocaleString('en-US', { 
-                                    month: 'short', 
-                                    day: 'numeric', 
-                                    hour: '2-digit', 
-                                    minute: '2-digit' 
-                                });
-                            }),
-                            datasets: [
-                                {
-                                    label: 'Available Balance',
-                                    data: this.balanceHistory.map(p => p.available_balance),
-                                    borderColor: '#7fb800',
-                                    backgroundColor: 'rgba(127, 184, 0, 0.1)',
-                                    borderWidth: 3,
-                                    tension: 0.4,
-                                    fill: true,
-                                    pointRadius: 4,
-                                    pointHoverRadius: 6
-                                }
-                            ]
+                            labels: labels,
+                            datasets: [{
+                                label: 'Cumulative P/L',
+                                data: data,
+                                borderColor: isProfit ? '#7fb800' : '#ff4444',
+                                backgroundColor: isProfit ? 'rgba(127, 184, 0, 0.2)' : 'rgba(255, 68, 68, 0.2)',
+                                borderWidth: 3,
+                                tension: 0.4,
+                                fill: true,
+                                pointRadius: 2,
+                                pointHoverRadius: 5,
+                                pointBackgroundColor: isProfit ? '#7fb800' : '#ff4444',
+                                pointBorderColor: isProfit ? '#7fb800' : '#ff4444'
+                            }]
                         },
                         options: {
                             responsive: true,
@@ -1041,14 +1058,21 @@
                                         color: '#d4af37',
                                         font: {
                                             family: "'Courier New', monospace",
-                                            size: 14
+                                            size: 12
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return 'P/L: $' + context.parsed.y.toFixed(2);
                                         }
                                     }
                                 }
                             },
                             scales: {
                                 y: {
-                                    beginAtZero: false,
+                                    beginAtZero: true,
                                     ticks: {
                                         color: '#b8941e',
                                         font: {

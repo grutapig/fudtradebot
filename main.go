@@ -153,6 +153,13 @@ func runTradingLoop(exchange AsterDexExchange, activityClient ExternalActivityCl
 	if err != nil {
 		log.Printf("[%s] Warning: Failed to restore position state: %v", pair.Symbol, err)
 		log.Printf("[%s] Starting with default state (no position)", pair.Symbol)
+	} else if position == nil {
+		log.Printf("[%s] ✓ No existing position found on exchange", pair.Symbol)
+		if err := CloseOpenPositionsBySymbol(pair.Symbol); err != nil {
+			log.Printf("[%s] Failed to close orphaned DB positions: %v", pair.Symbol, err)
+		} else {
+			log.Printf("[%s] ✓ Closed any orphaned positions in database", pair.Symbol)
+		}
 	} else if position != nil {
 		state.CurrentPosition = position.Side
 		state.OpenedAt = position.Timestamp
@@ -160,6 +167,14 @@ func runTradingLoop(exchange AsterDexExchange, activityClient ExternalActivityCl
 			pair.Symbol, position.Side, position.Timestamp.Format("2006-01-02 15:04:05"))
 		log.Printf("[%s]   Entry price: %.6f, Amount: %.6f, P/L: %.2f USDT",
 			pair.Symbol, position.EntryPrice, position.Amount, position.UnrealizedPL)
+
+		oppositeSide := PositionSideLong
+		if position.Side == PositionSideLong {
+			oppositeSide = PositionSideShort
+		}
+		if err := DeleteOpenPositionBySymbolAndSide(pair.Symbol, string(oppositeSide)); err == nil {
+			log.Printf("[%s] ✓ Deleted opposite %s position from database", pair.Symbol, oppositeSide)
+		}
 
 		dbPosition, err := GetOpenPositionBySymbolAndSide(pair.Symbol, string(position.Side))
 		if err == nil {

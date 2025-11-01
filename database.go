@@ -366,6 +366,20 @@ func GetOpenPositionBySymbolAndSide(symbol string, side string) (PositionRecord,
 	return position, err
 }
 
+func CloseOpenPositionsBySymbol(symbol string) error {
+	return DB.Model(&PositionRecord{}).
+		Where("symbol = ? AND is_closed = ?", symbol, false).
+		Updates(map[string]interface{}{
+			"is_closed":    true,
+			"closed_at":    time.Now(),
+			"close_reason": "no_exchange_position_on_init",
+		}).Error
+}
+
+func DeleteOpenPositionBySymbolAndSide(symbol string, side string) error {
+	return DB.Unscoped().Where("symbol = ? AND side = ? AND is_closed = ?", symbol, side, false).Delete(&PositionRecord{}).Error
+}
+
 func GetOpenPositions() ([]PositionRecord, error) {
 	var positions []PositionRecord
 	err := DB.Where("is_closed = ?", false).Find(&positions).Error
@@ -377,6 +391,14 @@ func GetClosedPositions(hoursBack int) ([]PositionRecord, error) {
 	startTime := time.Now().Add(-time.Duration(hoursBack) * time.Hour)
 	err := DB.Where("is_closed = ? AND closed_at >= ?", true, startTime).
 		Order("closed_at DESC").
+		Find(&positions).Error
+	return positions, err
+}
+
+func GetAllClosedPositionsOrdered() ([]PositionRecord, error) {
+	var positions []PositionRecord
+	err := DB.Where("is_closed = ?", true).
+		Order("closed_at ASC").
 		Find(&positions).Error
 	return positions, err
 }

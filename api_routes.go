@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +42,8 @@ func handleAPIRoutes(w http.ResponseWriter, r *http.Request) {
 		handlePositionSnapshots(w, r)
 	case strings.HasPrefix(path, "/fud-attacks"):
 		handleFudAttacks(w, r)
+	case strings.HasPrefix(path, "/pnl-history"):
+		handlePnLHistory(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -402,6 +405,12 @@ func handlePositions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	positions := make([]PositionItem, len(allPositions))
+
+	var totalProfitPositions float64
+	var totalLossPositions float64
+	var totalLongPositions float64
+	var totalShortPositions float64
+
 	for i, p := range allPositions {
 		positions[i] = PositionItem{
 			UUID:             p.UUID,
@@ -421,11 +430,29 @@ func handlePositions(w http.ResponseWriter, r *http.Request) {
 			OpenReason:       p.OpenReason,
 			CloseReason:      p.CloseReason,
 		}
+
+		pnl := p.CurrentPnL
+		if pnl >= 0 {
+			totalProfitPositions += pnl
+		} else {
+			totalLossPositions += pnl
+		}
+
+		if p.Side == "LONG" {
+			totalLongPositions += pnl
+		} else if p.Side == "SHORT" {
+			totalShortPositions += pnl
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"positions": positions,
+		"positions":              positions,
+		"total_profit_positions": totalProfitPositions,
+		"total_loss_positions":   totalLossPositions,
+		"total_pnl":              totalProfitPositions + totalLossPositions,
+		"total_long_pnl":         totalLongPositions,
+		"total_short_pnl":        totalShortPositions,
 	})
 }
 
@@ -545,5 +572,60 @@ func handleFudAttacks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"fud_attacks": attackItems,
+	})
+}
+
+func handlePnLHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	positions, err := GetAllClosedPositionsOrdered()
+	if err != nil {
+		http.Error(w, "Failed to get positions", http.StatusInternalServerError)
+		return
+	}
+
+	hourlyMap := make(map[string]float64)
+	for _, pos := range positions {
+		if pos.ClosedAt == nil {
+			continue
+		}
+		hourKey := pos.ClosedAt.Truncate(time.Hour).Format(time.RFC3339)
+		hourlyMap[hourKey] += pos.CurrentPnL
+	}
+
+	keys := make([]string, 0, len(hourlyMap))
+	for k := range hourlyMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	type PnLPoint struct {
+		Timestamp     string  `json:"timestamp"`
+		PnL           float64 `json:"pnl"`
+		CumulativePnL float64 `json:"cumulative_pnl"`
+	}
+
+	cumulative := 0.0
+	result := make([]PnLPoint, 0)
+	for _, key := range keys {
+		cumulative += hourlyMap[key]
+		result = append(result, PnLPoint{
+			Timestamp:     key,
+			PnL:           hourlyMap[key],
+			CumulativePnL: cumulative,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"history": result,
 	})
 }
