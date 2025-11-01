@@ -39,6 +39,8 @@ func handleAPIRoutes(w http.ResponseWriter, r *http.Request) {
 		handlePositions(w, r)
 	case strings.HasPrefix(path, "/position-snapshots"):
 		handlePositionSnapshots(w, r)
+	case strings.HasPrefix(path, "/fud-attacks"):
+		handleFudAttacks(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -381,39 +383,43 @@ func handlePositions(w http.ResponseWriter, r *http.Request) {
 	allPositions := append(openPositions, closedPositions...)
 
 	type PositionItem struct {
-		UUID        string     `json:"uuid"`
-		Symbol      string     `json:"symbol"`
-		Side        string     `json:"side"`
-		Leverage    int        `json:"leverage"`
-		Quantity    float64    `json:"quantity"`
-		EntryPrice  float64    `json:"entry_price"`
-		OpenedAt    time.Time  `json:"opened_at"`
-		IsClosed    bool       `json:"is_closed"`
-		ClosedAt    *time.Time `json:"closed_at"`
-		ClosePrice  float64    `json:"close_price"`
-		RealizedPL  float64    `json:"realized_pl"`
-		Duration    int64      `json:"duration"`
-		OpenReason  string     `json:"open_reason"`
-		CloseReason string     `json:"close_reason"`
+		UUID             string     `json:"uuid"`
+		Symbol           string     `json:"symbol"`
+		Side             string     `json:"side"`
+		Leverage         int        `json:"leverage"`
+		Quantity         float64    `json:"quantity"`
+		EntryPrice       float64    `json:"entry_price"`
+		OpenedAt         time.Time  `json:"opened_at"`
+		IsClosed         bool       `json:"is_closed"`
+		ClosedAt         *time.Time `json:"closed_at"`
+		ClosePrice       float64    `json:"close_price"`
+		RealizedPL       float64    `json:"realized_pl"`
+		CurrentPnL       float64    `json:"current_pnl"`
+		CurrentMarkPrice float64    `json:"current_mark_price"`
+		Duration         int64      `json:"duration"`
+		OpenReason       string     `json:"open_reason"`
+		CloseReason      string     `json:"close_reason"`
 	}
 
 	positions := make([]PositionItem, len(allPositions))
 	for i, p := range allPositions {
 		positions[i] = PositionItem{
-			UUID:        p.UUID,
-			Symbol:      p.Symbol,
-			Side:        p.Side,
-			Leverage:    p.Leverage,
-			Quantity:    p.Quantity,
-			EntryPrice:  p.EntryPrice,
-			OpenedAt:    p.OpenedAt,
-			IsClosed:    p.IsClosed,
-			ClosedAt:    p.ClosedAt,
-			ClosePrice:  p.ClosePrice,
-			RealizedPL:  p.RealizedPL,
-			Duration:    p.Duration,
-			OpenReason:  p.OpenReason,
-			CloseReason: p.CloseReason,
+			UUID:             p.UUID,
+			Symbol:           p.Symbol,
+			Side:             p.Side,
+			Leverage:         p.Leverage,
+			Quantity:         p.Quantity,
+			EntryPrice:       p.EntryPrice,
+			OpenedAt:         p.OpenedAt,
+			IsClosed:         p.IsClosed,
+			ClosedAt:         p.ClosedAt,
+			ClosePrice:       p.ClosePrice,
+			RealizedPL:       p.RealizedPL,
+			CurrentPnL:       p.CurrentPnL,
+			CurrentMarkPrice: p.CurrentMarkPrice,
+			Duration:         p.Duration,
+			OpenReason:       p.OpenReason,
+			CloseReason:      p.CloseReason,
 		}
 	}
 
@@ -477,5 +483,67 @@ func handlePositionSnapshots(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"snapshots": snapshotItems,
+	})
+}
+
+func handleFudAttacks(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	positionUUID := r.URL.Query().Get("position_uuid")
+	if positionUUID == "" {
+		http.Error(w, "Position UUID required", http.StatusBadRequest)
+		return
+	}
+
+	attacks, err := GetFudAttacksByPositionUUID(positionUUID)
+	if err != nil {
+		log.Printf("Failed to get FUD attacks for position %s: %v", positionUUID, err)
+		attacks = []FudAttackRecord{}
+	}
+
+	type FudAttackItem struct {
+		ID              uint      `json:"id"`
+		Symbol          string    `json:"symbol"`
+		HasAttack       bool      `json:"has_attack"`
+		Confidence      float64   `json:"confidence"`
+		MessageCount    int       `json:"message_count"`
+		FudType         string    `json:"fud_type"`
+		Theme           string    `json:"theme"`
+		StartedHoursAgo int       `json:"started_hours_ago"`
+		LastAttackTime  time.Time `json:"last_attack_time"`
+		Justification   string    `json:"justification"`
+		Participants    string    `json:"participants"`
+		CreatedAt       time.Time `json:"created_at"`
+	}
+
+	attackItems := make([]FudAttackItem, len(attacks))
+	for i, a := range attacks {
+		attackItems[i] = FudAttackItem{
+			ID:              a.ID,
+			Symbol:          a.Symbol,
+			HasAttack:       a.HasAttack,
+			Confidence:      a.Confidence,
+			MessageCount:    a.MessageCount,
+			FudType:         a.FudType,
+			Theme:           a.Theme,
+			StartedHoursAgo: a.StartedHoursAgo,
+			LastAttackTime:  a.LastAttackTime,
+			Justification:   a.Justification,
+			Participants:    a.Participants,
+			CreatedAt:       a.CreatedAt,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"fud_attacks": attackItems,
 	})
 }

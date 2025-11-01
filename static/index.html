@@ -631,8 +631,8 @@
                                     <span class="value">{{ position.leverage }}x</span>
                                 </div>
                             </div>
-                            <div class="position-pl" :class="position.realized_pl >= 0 ? 'result-positive' : 'result-negative'">
-                                {{ position.realized_pl >= 0 ? '+' : '' }}${{ position.realized_pl.toFixed(2) }}
+                            <div class="position-pl" :class="getPnLClass(position)">
+                                {{ getPnLDisplay(position) }}
                             </div>
                             <div class="position-status">
                                 <span v-if="position.is_closed" class="status-closed">CLOSED</span>
@@ -823,18 +823,82 @@
                         </div>
                     </div>
 
+                    <div class="modal-section" v-if="positionFudAttacks.length > 0">
+                        <div class="section-title">FUD Attack Analysis ({{ positionFudAttacks.length }})</div>
+                        <div class="decisions-list">
+                            <div v-for="attack in positionFudAttacks" :key="attack.id" class="decision-card" 
+                                 :style="attack.has_attack ? 'border-color: #ff4444;' : 'border-color: #00ff88;'">
+                                <div class="decision-time">{{ formatDateTime(attack.created_at) }}</div>
+                                <div class="info-grid" style="margin-top: 10px;">
+                                    <div class="info-item">
+                                        <div class="info-label">Attack Detected</div>
+                                        <div class="info-value" :class="attack.has_attack ? 'result-negative' : 'result-positive'">
+                                            {{ attack.has_attack ? 'YES ⚠️' : 'NO ✓' }}
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Confidence</div>
+                                        <div class="info-value">{{ (attack.confidence * 100).toFixed(0) }}%</div>
+                                    </div>
+                                    <div class="info-item" v-if="attack.has_attack">
+                                        <div class="info-label">FUD Type</div>
+                                        <div class="info-value">{{ attack.fud_type }}</div>
+                                    </div>
+                                    <div class="info-item" v-if="attack.has_attack">
+                                        <div class="info-label">Message Count</div>
+                                        <div class="info-value">{{ attack.message_count }}</div>
+                                    </div>
+                                    <div class="info-item" v-if="attack.has_attack">
+                                        <div class="info-label">Started</div>
+                                        <div class="info-value">{{ attack.started_hours_ago }}h ago</div>
+                                    </div>
+                                    <div class="info-item" v-if="attack.has_attack && attack.last_attack_time">
+                                        <div class="info-label">Last Attack</div>
+                                        <div class="info-value" style="font-size: 0.9em;">{{ formatDateTime(attack.last_attack_time) }}</div>
+                                    </div>
+                                </div>
+                                <div v-if="attack.has_attack && attack.theme" class="explanation-text" style="margin-top: 10px;">
+                                    <strong>Theme:</strong> {{ attack.theme }}
+                                </div>
+                                <div v-if="attack.has_attack && attack.participants" class="explanation-text" style="margin-top: 10px;">
+                                    <strong>Participants:</strong> {{ attack.participants }}
+                                </div>
+                                <div class="explanation-text" style="margin-top: 10px;">
+                                    {{ attack.justification }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="modal-section" v-if="positionSnapshots.length > 0">
                         <div class="section-title">Snapshots History</div>
-                        <div class="chart-controls">
-                            <button v-for="metric in snapshotMetrics" :key="metric.key" 
-                                    class="chart-toggle" 
-                                    :class="{ active: metric.visible }"
-                                    @click="toggleMetric(metric.key)">
-                                {{ metric.label }}
-                            </button>
-                        </div>
                         <div class="snapshots-chart-container">
                             <canvas id="snapshotsChart"></canvas>
+                        </div>
+                        <div class="decisions-list" style="margin-top: 20px;">
+                            <div v-for="snapshot in positionSnapshots.slice().reverse()" :key="snapshot.id" class="decision-card">
+                                <div class="decision-time">{{ formatDateTime(snapshot.created_at) }}</div>
+                                <div class="info-grid" style="margin-top: 10px;">
+                                    <div class="info-item">
+                                        <div class="info-label">Mark Price</div>
+                                        <div class="info-value">${{ snapshot.mark_price.toFixed(4) }}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Entry Price</div>
+                                        <div class="info-value">${{ snapshot.entry_price.toFixed(4) }}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Unrealized P/L</div>
+                                        <div class="info-value" :class="snapshot.unrealized_pl >= 0 ? 'result-positive' : 'result-negative'">
+                                            {{ snapshot.unrealized_pl >= 0 ? '+' : '' }}${{ snapshot.unrealized_pl.toFixed(2) }}
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Amount</div>
+                                        <div class="info-value">{{ snapshot.amount.toFixed(4) }}</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -860,6 +924,7 @@
                     selectedPosition: null,
                     positionDecisions: [],
                     positionSnapshots: [],
+                    positionFudAttacks: [],
                     chart: null,
                     snapshotsChart: null,
                     snapshotMetrics: [
@@ -948,8 +1013,8 @@
                             }),
                             datasets: [
                                 {
-                                    label: 'Balance',
-                                    data: this.balanceHistory.map(p => p.balance),
+                                    label: 'Available Balance',
+                                    data: this.balanceHistory.map(p => p.available_balance),
                                     borderColor: '#00ff88',
                                     backgroundColor: 'rgba(0, 255, 136, 0.1)',
                                     borderWidth: 3,
@@ -957,39 +1022,6 @@
                                     fill: true,
                                     pointRadius: 4,
                                     pointHoverRadius: 6
-                                },
-                                {
-                                    label: 'Available Balance',
-                                    data: this.balanceHistory.map(p => p.available_balance),
-                                    borderColor: '#00ccff',
-                                    backgroundColor: 'rgba(0, 204, 255, 0.1)',
-                                    borderWidth: 2,
-                                    tension: 0.4,
-                                    fill: false,
-                                    pointRadius: 3,
-                                    pointHoverRadius: 5
-                                },
-                                {
-                                    label: 'Max Withdraw',
-                                    data: this.balanceHistory.map(p => p.max_withdraw_amount),
-                                    borderColor: '#ffaa00',
-                                    backgroundColor: 'rgba(255, 170, 0, 0.1)',
-                                    borderWidth: 2,
-                                    tension: 0.4,
-                                    fill: false,
-                                    pointRadius: 3,
-                                    pointHoverRadius: 5
-                                },
-                                {
-                                    label: 'Cross Wallet Balance',
-                                    data: this.balanceHistory.map(p => p.cross_wallet_balance),
-                                    borderColor: '#ff44ff',
-                                    backgroundColor: 'rgba(255, 68, 255, 0.1)',
-                                    borderWidth: 1,
-                                    tension: 0.4,
-                                    fill: false,
-                                    pointRadius: 2,
-                                    pointHoverRadius: 4
                                 }
                             ]
                         },
@@ -1060,16 +1092,19 @@
 
                         this.selectedPosition = position;
 
-                        const [decisionsRes, snapshotsRes] = await Promise.all([
+                        const [decisionsRes, snapshotsRes, fudAttacksRes] = await Promise.all([
                             fetch(`/api/position-decisions?position_uuid=${positionUUID}`),
-                            fetch(`/api/position-snapshots?position_uuid=${positionUUID}`)
+                            fetch(`/api/position-snapshots?position_uuid=${positionUUID}`),
+                            fetch(`/api/fud-attacks?position_uuid=${positionUUID}`)
                         ]);
 
                         const decisionsData = await decisionsRes.json();
                         const snapshotsData = await snapshotsRes.json();
+                        const fudAttacksData = await fudAttacksRes.json();
 
                         this.positionDecisions = decisionsData.decisions || [];
                         this.positionSnapshots = snapshotsData.snapshots || [];
+                        this.positionFudAttacks = fudAttacksData.fud_attacks || [];
 
                         this.showPositionModal = true;
 
@@ -1084,6 +1119,7 @@
                     this.selectedPosition = null;
                     this.positionDecisions = [];
                     this.positionSnapshots = [];
+                    this.positionFudAttacks = [];
                     if (this.snapshotsChart) {
                         this.snapshotsChart.destroy();
                         this.snapshotsChart = null;
@@ -1237,6 +1273,14 @@
                     if (trend === 'LONG') return 'trend-up';
                     if (trend === 'SHORT') return 'trend-down';
                     return 'trend-flat';
+                },
+                getPnLClass(position) {
+                    const pnl = position.is_closed ? position.realized_pl : (position.current_pnl || 0);
+                    return pnl >= 0 ? 'result-positive' : 'result-negative';
+                },
+                getPnLDisplay(position) {
+                    const pnl = position.is_closed ? position.realized_pl : (position.current_pnl || 0);
+                    return (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
                 }
             },
             mounted() {

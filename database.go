@@ -51,23 +51,41 @@ type TradingDecisionRecord struct {
 }
 
 type PositionRecord struct {
-	ID          uint      `gorm:"primarykey"`
-	UUID        string    `gorm:"uniqueIndex;not null"`
-	Symbol      string    `gorm:"index;not null"`
-	Side        string    `gorm:"not null"`
-	Leverage    int       `gorm:"not null"`
-	Quantity    float64   `gorm:"not null"`
-	EntryPrice  float64   `gorm:"not null"`
-	OpenedAt    time.Time `gorm:"index;not null"`
-	IsClosed    bool      `gorm:"index;default:false"`
-	ClosedAt    *time.Time
-	ClosePrice  float64
-	RealizedPL  float64
-	Duration    int64
-	OpenReason  string
-	CloseReason string
-	CreatedAt   time.Time `gorm:"index"`
-	UpdatedAt   time.Time
+	ID               uint      `gorm:"primarykey"`
+	UUID             string    `gorm:"uniqueIndex;not null"`
+	Symbol           string    `gorm:"index;not null"`
+	Side             string    `gorm:"not null"`
+	Leverage         int       `gorm:"not null"`
+	Quantity         float64   `gorm:"not null"`
+	EntryPrice       float64   `gorm:"not null"`
+	OpenedAt         time.Time `gorm:"index;not null"`
+	IsClosed         bool      `gorm:"index;default:false"`
+	ClosedAt         *time.Time
+	ClosePrice       float64
+	RealizedPL       float64
+	CurrentPnL       float64
+	CurrentMarkPrice float64
+	Duration         int64
+	OpenReason       string
+	CloseReason      string
+	CreatedAt        time.Time `gorm:"index"`
+	UpdatedAt        time.Time
+}
+
+type FudAttackRecord struct {
+	ID              uint   `gorm:"primarykey"`
+	PositionUUID    string `gorm:"index"`
+	Symbol          string `gorm:"index;not null"`
+	HasAttack       bool   `gorm:"not null"`
+	Confidence      float64
+	MessageCount    int
+	FudType         string
+	Theme           string
+	StartedHoursAgo int
+	LastAttackTime  time.Time `gorm:"index"`
+	Justification   string
+	Participants    string
+	CreatedAt       time.Time `gorm:"index"`
 }
 
 var DB *gorm.DB
@@ -79,7 +97,7 @@ func InitDatabase() error {
 		return err
 	}
 
-	return DB.AutoMigrate(&BalanceRecord{}, &PositionSnapshot{}, &TradingDecisionRecord{}, &PositionRecord{})
+	return DB.AutoMigrate(&BalanceRecord{}, &PositionSnapshot{}, &TradingDecisionRecord{}, &PositionRecord{}, &FudAttackRecord{})
 }
 
 func SaveBalance(asset string, totalBalance float64, availableBalance float64) error {
@@ -149,7 +167,16 @@ func SavePositionSnapshot(position Position, markPrice float64, positionUUID str
 		PositionOpenedAt: position.Timestamp,
 		CreatedAt:        time.Now(),
 	}
-	return DB.Create(&snapshot).Error
+	if err := DB.Create(&snapshot).Error; err != nil {
+		return err
+	}
+
+	return DB.Model(&PositionRecord{}).
+		Where("uuid = ? AND is_closed = ?", positionUUID, false).
+		Updates(map[string]interface{}{
+			"current_pn_l":       position.UnrealizedPL,
+			"current_mark_price": markPrice,
+		}).Error
 }
 
 func GetPositionHistory(symbol string, hoursBack int) ([]PositionSnapshot, error) {
@@ -355,4 +382,63 @@ func GetPositionsBySymbol(symbol string, hoursBack int) ([]PositionRecord, error
 		Order("opened_at DESC").
 		Find(&positions).Error
 	return positions, err
+}
+
+func SaveFudAttack(attack ClaudeFudAttackResponse, symbol string, positionUUID string) error {
+	participantsJSON := ""
+	if len(attack.Participants) > 0 {
+		for _, p := range attack.Participants {
+			if participantsJSON != "" {
+				participantsJSON += ", "
+			}
+			participantsJSON += p.Username
+		}
+	}
+
+	record := FudAttackRecord{
+		PositionUUID:    positionUUID,
+		Symbol:          symbol,
+		HasAttack:       attack.HasAttack,
+		Confidence:      attack.Confidence,
+		MessageCount:    attack.MessageCount,
+		FudType:         attack.FudType,
+		Theme:           attack.Theme,
+		StartedHoursAgo: attack.StartedHoursAgo,
+		LastAttackTime:  attack.LastAttackTime,
+		Justification:   attack.Justification,
+		Participants:    participantsJSON,
+		CreatedAt:       time.Now(),
+	}
+	return DB.Create(&record).Error
+}
+
+func GetRecentFudAttacks(symbol string, hoursBack int) ([]FudAttackRecord, error) {
+	var attacks []FudAttackRecord
+	startTime := time.Now().Add(-time.Duration(hoursBack) * time.Hour)
+	err := DB.Where("symbol = ? AND created_at >= ?", symbol, startTime).
+		Order("created_at DESC").
+		Find(&attacks).Error
+	return attacks, err
+}
+
+func GetLatestFudAttack(symbol string) (*FudAttackRecord, error) {
+	var attack FudAttackRecord
+	err := DB.Where("symbol = ?", symbol).
+		Order("created_at DESC").
+		First(&attack).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &attack, nil
+}
+
+func GetFudAttacksByPositionUUID(positionUUID string) ([]FudAttackRecord, error) {
+	var attacks []FudAttackRecord
+	err := DB.Where("position_uuid = ?", positionUUID).
+		Order("created_at DESC").
+		Find(&attacks).Error
+	return attacks, err
 }

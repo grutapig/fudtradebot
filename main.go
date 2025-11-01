@@ -301,6 +301,13 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 						log.Printf("[%s] FUD attack analysis failed: %v", pair.Symbol, err)
 					} else {
 						lastFudAttack = fudAttack
+
+						if err := SaveFudAttack(fudAttack, pair.Symbol, state.PositionUUID); err != nil {
+							log.Printf("[%s] Failed to save FUD attack to database: %v", pair.Symbol, err)
+						} else {
+							log.Printf("[%s] FUD attack analysis saved to database", pair.Symbol)
+						}
+
 						log.Printf("\n[%s] ===== FUD ATTACK ANALYSIS =====", pair.Symbol)
 						if fudAttack.HasAttack {
 							log.Printf("[%s] ⚠️  COORDINATED FUD ATTACK DETECTED!", pair.Symbol)
@@ -309,11 +316,20 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 							log.Printf("[%s]   FUD Type: %s", pair.Symbol, fudAttack.FudType)
 							log.Printf("[%s]   Theme: %s", pair.Symbol, fudAttack.Theme)
 							log.Printf("[%s]   Started: %d hours ago", pair.Symbol, fudAttack.StartedHoursAgo)
+							log.Printf("[%s]   Last Attack Time: %s", pair.Symbol, fudAttack.LastAttackTime.Format("2006-01-02 15:04:05"))
 							log.Printf("[%s]   Participants:", pair.Symbol)
 							for _, p := range fudAttack.Participants {
 								log.Printf("[%s]     - %s (%d messages)", pair.Symbol, p.Username, p.MessageCount)
 							}
 							log.Printf("[%s]   Justification: %s", pair.Symbol, fudAttack.Justification)
+
+							timeSinceAttack := time.Since(fudAttack.LastAttackTime)
+							if timeSinceAttack <= 1*time.Hour && !state.FudAttackMode {
+								log.Printf("[%s] 🚨 ACTIVATING FUD ATTACK TRADING MODE (attack is fresh: %.0f min ago)", pair.Symbol, timeSinceAttack.Minutes())
+								state.FudAttackMode = true
+								state.FudAttackStartTime = fudAttack.LastAttackTime
+								state.FudAttackShortStarted = false
+							}
 						} else {
 							log.Printf("[%s] ✓ No coordinated FUD attack detected", pair.Symbol)
 							log.Printf("[%s]   Confidence: %.0f%%", pair.Symbol, fudAttack.Confidence*100)
@@ -330,6 +346,77 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 				}
 			}
 		}
+	}
+
+	handledByFudMode, err := processFudAttackTradingCycle(exchange, pair, state, lastFudAttack, coinIchimoku.Analysis)
+	if err != nil {
+		log.Printf("[%s] Error in FUD attack trading cycle: %v", pair.Symbol, err)
+	}
+	if handledByFudMode {
+		log.Printf("[%s] Cycle handled by FUD attack mode", pair.Symbol)
+		return nil
+	}
+
+	if state.FudAttackMode {
+		log.Printf("[%s] 🚨 FUD ATTACK MODE: Opening forced SHORT position", pair.Symbol)
+
+		if state.CurrentPosition != PositionSideShort {
+			if state.CurrentPosition != PositionSideBoth {
+				log.Printf("[%s] Closing existing %s position", pair.Symbol, state.CurrentPosition)
+				if err := exchange.ClosePosition(pair.Symbol, state.CurrentPosition); err != nil {
+					log.Printf("[%s] Failed to close position: %v", pair.Symbol, err)
+					return err
+				}
+
+				if state.PositionUUID != "" {
+					markPrice, _ := exchange.GetMarkPrice(pair.Symbol)
+					closedPosition, _ := exchange.GetPosition(pair.Symbol)
+					realizedPL := 0.0
+					if closedPosition != nil {
+						realizedPL = closedPosition.UnrealizedPL
+					}
+					if err := UpdatePositionClose(state.PositionUUID, markPrice, realizedPL, "fud_mode_switch"); err != nil {
+						log.Printf("[%s] Failed to update position close: %v", pair.Symbol, err)
+					}
+				}
+
+				state.CurrentPosition = PositionSideBoth
+				state.PositionUUID = ""
+				state.OpenReason = ""
+			}
+
+			log.Printf("[%s] Opening forced SHORT position due to FUD attack", pair.Symbol)
+			position, err := exchange.OpenPosition(pair.Symbol, PositionSideShort, pair.Leverage, pair.Quantity)
+			if err != nil {
+				log.Printf("[%s] Failed to open SHORT: %v", pair.Symbol, err)
+				return err
+			}
+
+			state.CurrentPosition = PositionSideShort
+			state.OpenedAt = time.Now()
+			state.OpenReason = "fud_attack_forced"
+			state.PositionUUID = GeneratePositionUUID()
+
+			log.Printf("[%s] FUD SHORT position opened: entry %.6f, amount %.6f, UUID: %s",
+				pair.Symbol, position.EntryPrice, position.Amount, state.PositionUUID)
+
+			positionRecord := PositionRecord{
+				UUID:       state.PositionUUID,
+				Symbol:     pair.Symbol,
+				Side:       string(PositionSideShort),
+				Leverage:   pair.Leverage,
+				Quantity:   pair.Quantity,
+				EntryPrice: position.EntryPrice,
+				OpenedAt:   state.OpenedAt,
+				OpenReason: "fud_attack_forced",
+				CreatedAt:  time.Now(),
+			}
+			if err := SavePositionOpen(positionRecord); err != nil {
+				log.Printf("[%s] Failed to save position to database: %v", pair.Symbol, err)
+			}
+		}
+
+		return nil
 	}
 
 	decision := MakeTradingDecision(btcIchimoku.Analysis, coinIchimoku.Analysis, activityAnalysis, fudActivityAnalysis, sentiment)

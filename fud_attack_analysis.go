@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/grutapig/fudtradebot/claude"
+	"time"
 )
 
 func AnalyzeFudAttack(claudeClient claude.ClaudeApi, tweets []CommunityTweet) (ClaudeFudAttackResponse, error) {
@@ -44,6 +45,7 @@ Response MUST be in JSON format:
   "fud_type": "technical",
   "theme": "Claims of critical bug in smart contract with users supporting each other",
   "started_hours_ago": 2,
+  "last_attack_time": "2025-11-01T15:30:00Z",
   "justification": "Users user1 and user2 engaged in coordinated discussion about alleged contract vulnerability, reinforcing each other's concerns and creating panic. Pattern shows artificial timing and similar language."
 }
 
@@ -56,6 +58,7 @@ If NO attack detected, return:
   "fud_type": "",
   "theme": "",
   "started_hours_ago": 0,
+  "last_attack_time": "",
   "justification": "No signs of coordinated FUD attack. Community discussions appear organic."
 }`
 
@@ -89,6 +92,12 @@ If NO attack detected, return:
 	var result ClaudeFudAttackResponse
 	if err := json.Unmarshal([]byte("{"+response.Content[0].Text), &result); err != nil {
 		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to parse Claude response: %w, response: %s", err, response.Content[0].Text)
+	}
+
+	if result.HasAttack && !result.LastAttackTime.IsZero() {
+		result.LastAttackTime = result.LastAttackTime
+	} else if result.HasAttack && result.LastAttackTime.IsZero() {
+		result.LastAttackTime = time.Now().Add(-time.Duration(result.StartedHoursAgo) * time.Hour)
 	}
 
 	return result, nil

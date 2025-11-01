@@ -119,6 +119,9 @@ type TradingState struct {
 	LastFudCheckTime      time.Time
 	LastFudCheckTweetID   string
 	LastDecisionHash      string
+	FudAttackMode         bool
+	FudAttackStartTime    time.Time
+	FudAttackShortStarted bool
 }
 
 type CommunityTweet struct {
@@ -157,5 +160,6 @@ type ClaudeFudAttackResponse struct {
 	FudType         string                 `json:"fud_type"`
 	Theme           string                 `json:"theme"`
 	StartedHoursAgo int                    `json:"started_hours_ago"`
+	LastAttackTime  time.Time              `json:"last_attack_time"`
 	Justification   string                 `json:"justification"`
 }
