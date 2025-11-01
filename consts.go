@@ -15,3 +15,4 @@ const (
 	PROMPT_FILE_ANALYZE  = "prompt_analyze.txt"
 	PROMPT_FILE_DECISION = "prompt_decision.txt"
 )
+const KLINES_INTERVAL = "15m"

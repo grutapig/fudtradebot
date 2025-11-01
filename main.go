@@ -119,15 +119,20 @@ func runBalanceCollector(exchange AsterDexExchange) {
 	defer ticker.Stop()
 
 	for {
-		balanceInfo, err := exchange.GetBalanceInfo()
+		balances, err := exchange.GetAllBalances()
 		if err != nil {
-			log.Printf("Failed to get balance: %v", err)
+			log.Printf("Failed to get balances: %v", err)
 		} else {
-			if err := SaveBalance("USDT", balanceInfo.TotalBalance, balanceInfo.AvailableBalance); err != nil {
-				log.Printf("Failed to save balance: %v", err)
+			if err := SaveAllBalances(balances); err != nil {
+				log.Printf("Failed to save balances: %v", err)
 			} else {
-				log.Printf("Balance saved - Total: %.2f USDT, Available: %.2f USDT",
-					balanceInfo.TotalBalance, balanceInfo.AvailableBalance)
+				log.Printf("Balances saved - %d assets", len(balances))
+				for _, bal := range balances {
+					if bal.Balance > 0 || bal.AvailableBalance > 0 {
+						log.Printf("  %s: Balance=%.2f, Available=%.2f, MaxWithdraw=%.2f",
+							bal.Asset, bal.Balance, bal.AvailableBalance, bal.MaxWithdrawAmount)
+					}
+				}
 			}
 		}
 		<-ticker.C
@@ -212,12 +217,13 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		return err
 	}
 
-	btcKlines, err := exchange.Klines("BTCUSDT", "1h", 0, 0, 52)
+	interval := KLINES_INTERVAL
+	btcKlines, err := exchange.Klines("BTCUSDT", interval, 0, 0, 52)
 	if err != nil {
 		log.Printf("[%s] Failed to get BTC price data: %v", pair.Symbol, err)
 		return err
 	}
-	coinKlines, err := exchange.Klines(pair.Symbol, "1h", 0, 0, 52)
+	coinKlines, err := exchange.Klines(pair.Symbol, interval, 0, 0, 52)
 	if err != nil {
 		log.Printf("[%s] Failed to get coin price data: %v", pair.Symbol, err)
 		return err
@@ -381,15 +387,31 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		if state.CurrentPosition != PositionSideBoth {
 			log.Printf("[%s] No signal - closing existing position", pair.Symbol)
 
+			var closedPosition *Position
 			if state.CurrentPosition == PositionSideLong {
 				if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
 					log.Printf("[%s] Failed to close LONG: %v", pair.Symbol, err)
 					return err
 				}
+				closedPosition, _ = exchange.GetPosition(pair.Symbol)
 			} else if state.CurrentPosition == PositionSideShort {
 				if err := exchange.ClosePosition(pair.Symbol, PositionSideShort); err != nil {
 					log.Printf("[%s] Failed to close SHORT: %v", pair.Symbol, err)
 					return err
+				}
+				closedPosition, _ = exchange.GetPosition(pair.Symbol)
+			}
+
+			if state.PositionUUID != "" {
+				markPrice, _ := exchange.GetMarkPrice(pair.Symbol)
+				realizedPL := 0.0
+				if closedPosition != nil {
+					realizedPL = closedPosition.UnrealizedPL
+				}
+				if err := UpdatePositionClose(state.PositionUUID, markPrice, realizedPL, "no_signal"); err != nil {
+					log.Printf("[%s] Failed to update position close: %v", pair.Symbol, err)
+				} else {
+					log.Printf("[%s] Position close recorded in database", pair.Symbol)
 				}
 			}
 
@@ -421,6 +443,20 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		if err := exchange.ClosePosition(pair.Symbol, state.CurrentPosition); err != nil {
 			log.Printf("[%s] Failed to close position: %v", pair.Symbol, err)
 			return err
+		}
+
+		if state.PositionUUID != "" {
+			markPrice, _ := exchange.GetMarkPrice(pair.Symbol)
+			closedPosition, _ := exchange.GetPosition(pair.Symbol)
+			realizedPL := 0.0
+			if closedPosition != nil {
+				realizedPL = closedPosition.UnrealizedPL
+			}
+			if err := UpdatePositionClose(state.PositionUUID, markPrice, realizedPL, "switch_position"); err != nil {
+				log.Printf("[%s] Failed to update position close: %v", pair.Symbol, err)
+			} else {
+				log.Printf("[%s] Position close recorded in database", pair.Symbol)
+			}
 		}
 
 		state.CurrentPosition = PositionSideBoth
@@ -467,6 +503,23 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	}
 
 	log.Printf("[%s] Position opened: %s (entry: %.6f, amount: %.6f, reason: %s, UUID: %s)", pair.Symbol, desiredPosition, position.EntryPrice, position.Amount, decision.Reason, state.PositionUUID)
+
+	positionRecord := PositionRecord{
+		UUID:       state.PositionUUID,
+		Symbol:     pair.Symbol,
+		Side:       string(desiredPosition),
+		Leverage:   pair.Leverage,
+		Quantity:   pair.Quantity,
+		EntryPrice: position.EntryPrice,
+		OpenedAt:   state.OpenedAt,
+		OpenReason: decision.Reason,
+		CreatedAt:  time.Now(),
+	}
+	if err := SavePositionOpen(positionRecord); err != nil {
+		log.Printf("[%s] Failed to save position to database: %v", pair.Symbol, err)
+	} else {
+		log.Printf("[%s] Position record saved to database", pair.Symbol)
+	}
 
 	return nil
 }

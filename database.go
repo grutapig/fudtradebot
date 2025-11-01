@@ -8,11 +8,17 @@ import (
 )
 
 type BalanceRecord struct {
-	ID               uint   `gorm:"primarykey"`
-	Asset            string `gorm:"index"`
-	TotalBalance     float64
-	AvailableBalance float64
-	Timestamp        time.Time `gorm:"index"`
+	ID                 uint   `gorm:"primarykey"`
+	AccountAlias       string `gorm:"index"`
+	Asset              string `gorm:"index"`
+	Balance            float64
+	CrossWalletBalance float64
+	CrossUnPnl         float64
+	AvailableBalance   float64
+	MaxWithdrawAmount  float64
+	MarginAvailable    bool
+	UpdateTime         int64
+	Timestamp          time.Time `gorm:"index"`
 }
 
 type PositionSnapshot struct {
@@ -44,6 +50,26 @@ type TradingDecisionRecord struct {
 	CreatedAt           time.Time `gorm:"index"`
 }
 
+type PositionRecord struct {
+	ID          uint      `gorm:"primarykey"`
+	UUID        string    `gorm:"uniqueIndex;not null"`
+	Symbol      string    `gorm:"index;not null"`
+	Side        string    `gorm:"not null"`
+	Leverage    int       `gorm:"not null"`
+	Quantity    float64   `gorm:"not null"`
+	EntryPrice  float64   `gorm:"not null"`
+	OpenedAt    time.Time `gorm:"index;not null"`
+	IsClosed    bool      `gorm:"index;default:false"`
+	ClosedAt    *time.Time
+	ClosePrice  float64
+	RealizedPL  float64
+	Duration    int64
+	OpenReason  string
+	CloseReason string
+	CreatedAt   time.Time `gorm:"index"`
+	UpdatedAt   time.Time
+}
+
 var DB *gorm.DB
 
 func InitDatabase() error {
@@ -53,17 +79,42 @@ func InitDatabase() error {
 		return err
 	}
 
-	return DB.AutoMigrate(&BalanceRecord{}, &PositionSnapshot{}, &TradingDecisionRecord{})
+	return DB.AutoMigrate(&BalanceRecord{}, &PositionSnapshot{}, &TradingDecisionRecord{}, &PositionRecord{})
 }
 
 func SaveBalance(asset string, totalBalance float64, availableBalance float64) error {
 	record := BalanceRecord{
 		Asset:            asset,
-		TotalBalance:     totalBalance,
+		Balance:          totalBalance,
 		AvailableBalance: availableBalance,
 		Timestamp:        time.Now(),
 	}
 	return DB.Create(&record).Error
+}
+
+func SaveBalanceInfo(info AccountBalanceInfo) error {
+	record := BalanceRecord{
+		AccountAlias:       info.AccountAlias,
+		Asset:              info.Asset,
+		Balance:            info.Balance,
+		CrossWalletBalance: info.CrossWalletBalance,
+		CrossUnPnl:         info.CrossUnPnl,
+		AvailableBalance:   info.AvailableBalance,
+		MaxWithdrawAmount:  info.MaxWithdrawAmount,
+		MarginAvailable:    info.MarginAvailable,
+		UpdateTime:         info.UpdateTime,
+		Timestamp:          time.Now(),
+	}
+	return DB.Create(&record).Error
+}
+
+func SaveAllBalances(infos []AccountBalanceInfo) error {
+	for _, info := range infos {
+		if err := SaveBalanceInfo(info); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func GetBalanceHistory(asset string, hoursBack int) ([]BalanceRecord, error) {
@@ -75,6 +126,14 @@ func GetBalanceHistory(asset string, hoursBack int) ([]BalanceRecord, error) {
 		Find(&records).Error
 
 	return records, err
+}
+
+func GetAllAssets() ([]string, error) {
+	var assets []string
+	err := DB.Model(&BalanceRecord{}).
+		Distinct("asset").
+		Pluck("asset", &assets).Error
+	return assets, err
 }
 
 func SavePositionSnapshot(position Position, markPrice float64, positionUUID string) error {
@@ -240,4 +299,60 @@ func GetDecisionsByPositionUUID(positionUUID string) ([]TradingDecisionRecord, e
 		Find(&decisions).Error
 
 	return decisions, err
+}
+
+func SavePositionOpen(position PositionRecord) error {
+	return DB.Create(&position).Error
+}
+
+func UpdatePositionClose(uuid string, closePrice float64, realizedPL float64, closeReason string) error {
+	closedAt := time.Now()
+	var position PositionRecord
+
+	if err := DB.Where("uuid = ?", uuid).First(&position).Error; err != nil {
+		return err
+	}
+
+	duration := closedAt.Sub(position.OpenedAt).Milliseconds()
+
+	return DB.Model(&PositionRecord{}).
+		Where("uuid = ?", uuid).
+		Updates(map[string]interface{}{
+			"is_closed":    true,
+			"closed_at":    closedAt,
+			"close_price":  closePrice,
+			"realized_pl":  realizedPL,
+			"duration":     duration,
+			"close_reason": closeReason,
+		}).Error
+}
+
+func GetPositionByUUID(uuid string) (PositionRecord, error) {
+	var position PositionRecord
+	err := DB.Where("uuid = ?", uuid).First(&position).Error
+	return position, err
+}
+
+func GetOpenPositions() ([]PositionRecord, error) {
+	var positions []PositionRecord
+	err := DB.Where("is_closed = ?", false).Find(&positions).Error
+	return positions, err
+}
+
+func GetClosedPositions(hoursBack int) ([]PositionRecord, error) {
+	var positions []PositionRecord
+	startTime := time.Now().Add(-time.Duration(hoursBack) * time.Hour)
+	err := DB.Where("is_closed = ? AND closed_at >= ?", true, startTime).
+		Order("closed_at DESC").
+		Find(&positions).Error
+	return positions, err
+}
+
+func GetPositionsBySymbol(symbol string, hoursBack int) ([]PositionRecord, error) {
+	var positions []PositionRecord
+	startTime := time.Now().Add(-time.Duration(hoursBack) * time.Hour)
+	err := DB.Where("symbol = ? AND opened_at >= ?", symbol, startTime).
+		Order("opened_at DESC").
+		Find(&positions).Error
+	return positions, err
 }
