@@ -20,12 +20,6 @@ func runBalanceCollector(exchange AsterDexExchange) {
 				log.Printf("Failed to save balances: %v", err)
 			} else {
 				log.Printf("Balances saved - %d assets", len(balances))
-				for _, bal := range balances {
-					if bal.Balance > 0 || bal.AvailableBalance > 0 {
-						log.Printf("  %s: Balance=%.2f, Available=%.2f, MaxWithdraw=%.2f",
-							bal.Asset, bal.Balance, bal.AvailableBalance, bal.MaxWithdrawAmount)
-					}
-				}
 			}
 		}
 		<-ticker.C

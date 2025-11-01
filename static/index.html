@@ -796,6 +796,38 @@
                             {{ selectedDecision.DecisionExplanation }}
                         </div>
                     </div>
+
+                    <div class="modal-section" v-if="decisionAIValidation">
+                        <div class="section-title">🤖 AI Order Validation</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Should Open Order</div>
+                                <div class="info-value" :class="decisionAIValidation.should_open_order ? 'result-positive' : 'result-negative'">
+                                    {{ decisionAIValidation.should_open_order ? '✅ YES' : '❌ NO' }}
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">AI Confidence</div>
+                                <div class="info-value">{{ decisionAIValidation.confidence_percent.toFixed(1) }}%</div>
+                            </div>
+                        </div>
+                        <div class="explanation-text" style="margin-top: 15px;">
+                            <strong>AI Justification:</strong><br>
+                            {{ decisionAIValidation.justification }}
+                        </div>
+                        <details style="margin-top: 15px;">
+                            <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📤 Request Data Sent to AI</summary>
+                            <div class="explanation-text" style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                                <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(decisionAIValidation.request_data), null, 2) }}</pre>
+                            </div>
+                        </details>
+                        <details style="margin-top: 10px;">
+                            <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📥 Response Data from AI</summary>
+                            <div class="explanation-text" style="margin-top: 10px;">
+                                <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(decisionAIValidation.response_data), null, 2) }}</pre>
+                            </div>
+                        </details>
+                    </div>
                 </div>
             </div>
 
@@ -923,6 +955,44 @@
                         </div>
                     </div>
 
+                    <div class="modal-section" v-if="positionAIValidations.length > 0">
+                        <div class="section-title">🤖 AI Order Validation ({{ positionAIValidations.length }})</div>
+                        <div class="decisions-list">
+                            <div v-for="validation in positionAIValidations" :key="validation.id" class="decision-card"
+                                 :style="validation.should_open_order ? 'border-color: #7fb800;' : 'border-color: #ff4444;'">
+                                <div class="decision-time">{{ formatDateTime(validation.created_at) }}</div>
+                                <div class="info-grid" style="margin-top: 10px;">
+                                    <div class="info-item">
+                                        <div class="info-label">Should Open Order</div>
+                                        <div class="info-value" :class="validation.should_open_order ? 'result-positive' : 'result-negative'">
+                                            {{ validation.should_open_order ? '✅ YES' : '❌ NO' }}
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">AI Confidence</div>
+                                        <div class="info-value">{{ validation.confidence_percent.toFixed(1) }}%</div>
+                                    </div>
+                                </div>
+                                <div class="explanation-text" style="margin-top: 15px;">
+                                    <strong>AI Justification:</strong><br>
+                                    {{ validation.justification }}
+                                </div>
+                                <details style="margin-top: 15px;">
+                                    <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📤 Request Data Sent to AI</summary>
+                                    <div class="explanation-text" style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(validation.request_data), null, 2) }}</pre>
+                                    </div>
+                                </details>
+                                <details style="margin-top: 10px;">
+                                    <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📥 Response Data from AI</summary>
+                                    <div class="explanation-text" style="margin-top: 10px;">
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(validation.response_data), null, 2) }}</pre>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="modal-section" v-if="positionSnapshots.length > 0">
                         <div class="section-title">Snapshots History</div>
                         <div class="chart-controls">
@@ -1002,6 +1072,8 @@
                     positionDecisions: [],
                     positionSnapshots: [],
                     positionFudAttacks: [],
+                    positionAIValidations: [],
+                    decisionAIValidation: null,
                     pnlChart: null,
                     snapshotsChart: null,
                     chartMode: 'pnl'
@@ -1159,6 +1231,17 @@
                     try {
                         const response = await fetch(`/api/decision-detail?id=${decisionId}`);
                         this.selectedDecision = await response.json();
+                        
+                        if (this.selectedDecision.PositionUUID) {
+                            const aiValRes = await fetch(`/api/ai-validations?position_uuid=${this.selectedDecision.PositionUUID}`);
+                            const aiValData = await aiValRes.json();
+                            this.decisionAIValidation = aiValData.ai_validations && aiValData.ai_validations.length > 0 
+                                ? aiValData.ai_validations[0] 
+                                : null;
+                        } else {
+                            this.decisionAIValidation = null;
+                        }
+                        
                         this.showDecisionModal = true;
                     } catch (err) {
                         console.error('Failed to fetch decision details:', err);
@@ -1167,6 +1250,7 @@
                 closeDecisionModal() {
                     this.showDecisionModal = false;
                     this.selectedDecision = null;
+                    this.decisionAIValidation = null;
                 },
                 async openPositionDetail(positionUUID) {
                     try {
@@ -1175,19 +1259,22 @@
 
                         this.selectedPosition = position;
 
-                        const [decisionsRes, snapshotsRes, fudAttacksRes] = await Promise.all([
+                        const [decisionsRes, snapshotsRes, fudAttacksRes, aiValidationsRes] = await Promise.all([
                             fetch(`/api/position-decisions?position_uuid=${positionUUID}`),
                             fetch(`/api/position-snapshots?position_uuid=${positionUUID}`),
-                            fetch(`/api/fud-attacks?position_uuid=${positionUUID}`)
+                            fetch(`/api/fud-attacks?position_uuid=${positionUUID}`),
+                            fetch(`/api/ai-validations?position_uuid=${positionUUID}`)
                         ]);
 
                         const decisionsData = await decisionsRes.json();
                         const snapshotsData = await snapshotsRes.json();
                         const fudAttacksData = await fudAttacksRes.json();
+                        const aiValidationsData = await aiValidationsRes.json();
 
                         this.positionDecisions = decisionsData.decisions || [];
                         this.positionSnapshots = snapshotsData.snapshots || [];
                         this.positionFudAttacks = fudAttacksData.fud_attacks || [];
+                        this.positionAIValidations = aiValidationsData.ai_validations || [];
 
                         this.showPositionModal = true;
 
@@ -1203,6 +1290,7 @@
                     this.positionDecisions = [];
                     this.positionSnapshots = [];
                     this.positionFudAttacks = [];
+                    this.positionAIValidations = [];
                     if (this.snapshotsChart) {
                         this.snapshotsChart.destroy();
                         this.snapshotsChart = null;
