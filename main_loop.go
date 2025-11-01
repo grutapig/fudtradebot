@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/grutapig/fudtradebot/claude"
 	"log"
 	"time"
@@ -466,6 +467,58 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		log.Printf("[%s] Position already matches signal - holding", pair.Symbol)
 		return nil
 	}
+	var validationRecord *AIOrderValidationRecord
+	if claudeClient != nil {
+		log.Printf("[%s] Validating order decision with AI...", pair.Symbol)
+		aiValidation, err := ValidateOrderWithAI(*claudeClient, decision, btcIchimoku.Analysis, coinIchimoku.Analysis, activityAnalysis, fudActivityAnalysis, sentiment)
+		if err != nil {
+			log.Printf("[%s] AI validation failed: %v", pair.Symbol, err)
+			log.Printf("[%s] Proceeding without AI validation", pair.Symbol)
+		} else {
+			log.Printf("[%s] AI Validation Result:", pair.Symbol)
+			log.Printf("[%s]   Should Open: %v", pair.Symbol, aiValidation.ShouldOpenOrder)
+			log.Printf("[%s]   Confidence: %.1f%%", pair.Symbol, aiValidation.ConfidencePercent)
+			log.Printf("[%s]   Justification: %s", pair.Symbol, aiValidation.Justification)
+
+			requestDataJSON, _ := json.Marshal(map[string]interface{}{
+				"decision":      decision,
+				"btc_ichimoku":  btcIchimoku.Analysis,
+				"coin_ichimoku": coinIchimoku.Analysis,
+				"activity":      activityAnalysis,
+				"fud_activity":  fudActivityAnalysis,
+				"sentiment":     sentiment,
+			})
+			responseDataJSON, _ := json.Marshal(aiValidation)
+
+			validationRecord = &AIOrderValidationRecord{
+				PositionUUID:      "",
+				DecisionRecordID:  0,
+				Symbol:            pair.Symbol,
+				RequestData:       string(requestDataJSON),
+				ResponseData:      string(responseDataJSON),
+				ShouldOpenOrder:   aiValidation.ShouldOpenOrder,
+				ConfidencePercent: aiValidation.ConfidencePercent,
+				Justification:     aiValidation.Justification,
+				CreatedAt:         time.Now(),
+			}
+
+			if savedDecision != nil && savedDecision.ID > 0 {
+				validationRecord.DecisionRecordID = savedDecision.ID
+			}
+
+			if !aiValidation.ShouldOpenOrder {
+				log.Printf("[%s] ❌ AI rejected the order - not opening position", pair.Symbol)
+				if err := SaveAIOrderValidation(validationRecord); err != nil {
+					log.Printf("[%s] Failed to save AI validation: %v", pair.Symbol, err)
+				} else {
+					log.Printf("[%s] AI validation saved to database", pair.Symbol)
+				}
+				return nil
+			}
+
+			log.Printf("[%s] ✅ AI approved the order - proceeding", pair.Symbol)
+		}
+	}
 
 	log.Printf("[%s] Opening %s position", pair.Symbol, desiredPosition)
 	position, err := exchange.OpenPosition(pair.Symbol, desiredPosition, pair.Leverage, pair.Quantity)
@@ -478,7 +531,10 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	state.OpenedAt = time.Now()
 	state.OpenReason = decision.Reason
 	state.PositionUUID = GeneratePositionUUID()
-
+	if validationRecord != nil {
+		validationRecord.PositionUUID = state.PositionUUID
+		DB.Save(validationRecord)
+	}
 	if savedDecision != nil && savedDecision.ID > 0 {
 		if err := UpdateDecisionPositionUUIDByID(savedDecision.ID, state.PositionUUID); err != nil {
 			log.Printf("[%s] Failed to update decision ID %d with position UUID: %v", pair.Symbol, savedDecision.ID, err)
@@ -524,6 +580,18 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		log.Printf("[%s] Failed to save position to database: %v", pair.Symbol, err)
 	} else {
 		log.Printf("[%s] Position record saved to database", pair.Symbol)
+	}
+
+	if claudeClient != nil {
+		if err := DB.Model(&AIOrderValidationRecord{}).
+			Where("symbol = ? AND position_uuid = ''", pair.Symbol).
+			Order("created_at DESC").
+			Limit(1).
+			Update("position_uuid", state.PositionUUID).Error; err != nil {
+			log.Printf("[%s] Failed to link AI validation to position: %v", pair.Symbol, err)
+		} else {
+			log.Printf("[%s] AI validation linked to position UUID: %s", pair.Symbol, state.PositionUUID)
+		}
 	}
 
 	return nil

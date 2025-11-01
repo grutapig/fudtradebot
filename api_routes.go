@@ -44,6 +44,8 @@ func handleAPIRoutes(w http.ResponseWriter, r *http.Request) {
 		handleFudAttacks(w, r)
 	case strings.HasPrefix(path, "/pnl-history"):
 		handlePnLHistory(w, r)
+	case strings.HasPrefix(path, "/ai-validations"):
+		handleAIValidations(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -683,5 +685,59 @@ func handlePnLHistory(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"history": result,
+	})
+}
+
+func handleAIValidations(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	positionUUID := r.URL.Query().Get("position_uuid")
+	if positionUUID == "" {
+		http.Error(w, "Position UUID required", http.StatusBadRequest)
+		return
+	}
+
+	validations, err := GetAIValidationsByPositionUUID(positionUUID)
+	if err != nil {
+		log.Printf("Failed to get AI validations for position %s: %v", positionUUID, err)
+		validations = []AIOrderValidationRecord{}
+	}
+
+	type AIValidationItem struct {
+		ID                uint      `json:"id"`
+		Symbol            string    `json:"symbol"`
+		ShouldOpenOrder   bool      `json:"should_open_order"`
+		ConfidencePercent float64   `json:"confidence_percent"`
+		Justification     string    `json:"justification"`
+		RequestData       string    `json:"request_data"`
+		ResponseData      string    `json:"response_data"`
+		CreatedAt         time.Time `json:"created_at"`
+	}
+
+	validationItems := make([]AIValidationItem, len(validations))
+	for i, v := range validations {
+		validationItems[i] = AIValidationItem{
+			ID:                v.ID,
+			Symbol:            v.Symbol,
+			ShouldOpenOrder:   v.ShouldOpenOrder,
+			ConfidencePercent: v.ConfidencePercent,
+			Justification:     v.Justification,
+			RequestData:       v.RequestData,
+			ResponseData:      v.ResponseData,
+			CreatedAt:         v.CreatedAt,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ai_validations": validationItems,
 	})
 }

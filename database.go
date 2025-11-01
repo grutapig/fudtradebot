@@ -91,6 +91,19 @@ type FudAttackRecord struct {
 	CreatedAt       time.Time `gorm:"index"`
 }
 
+type AIOrderValidationRecord struct {
+	ID                uint   `gorm:"primarykey"`
+	PositionUUID      string `gorm:"index"`
+	DecisionRecordID  uint   `gorm:"index"`
+	Symbol            string `gorm:"index;not null"`
+	RequestData       string `gorm:"type:text"`
+	ResponseData      string `gorm:"type:text"`
+	ShouldOpenOrder   bool   `gorm:"not null"`
+	ConfidencePercent float64
+	Justification     string    `gorm:"type:text"`
+	CreatedAt         time.Time `gorm:"index"`
+}
+
 var DB *gorm.DB
 
 func InitDatabase() error {
@@ -100,7 +113,7 @@ func InitDatabase() error {
 		return err
 	}
 
-	return DB.AutoMigrate(&BalanceRecord{}, &PositionSnapshot{}, &TradingDecisionRecord{}, &PositionRecord{}, &FudAttackRecord{})
+	return DB.AutoMigrate(&BalanceRecord{}, &PositionSnapshot{}, &TradingDecisionRecord{}, &PositionRecord{}, &FudAttackRecord{}, &AIOrderValidationRecord{})
 }
 
 func SaveBalance(asset string, totalBalance float64, availableBalance float64) error {
@@ -546,4 +559,30 @@ func GetFudAttacksByPositionUUID(positionUUID string) ([]FudAttackRecord, error)
 		Order("created_at DESC").
 		Find(&attacks).Error
 	return attacks, err
+}
+
+func SaveAIOrderValidation(validation *AIOrderValidationRecord) error {
+	return DB.Create(validation).Error
+}
+
+func GetAIValidationsByPositionUUID(positionUUID string) ([]AIOrderValidationRecord, error) {
+	var validations []AIOrderValidationRecord
+	err := DB.Where("position_uuid = ?", positionUUID).
+		Order("created_at DESC").
+		Find(&validations).Error
+	return validations, err
+}
+
+func GetAIValidationByDecisionID(decisionID uint) (*AIOrderValidationRecord, error) {
+	var validation AIOrderValidationRecord
+	err := DB.Where("decision_record_id = ?", decisionID).
+		Order("created_at DESC").
+		First(&validation).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &validation, nil
 }

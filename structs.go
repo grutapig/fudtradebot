@@ -163,3 +163,9 @@ type ClaudeFudAttackResponse struct {
 	LastAttackTime  time.Time              `json:"last_attack_time"`
 	Justification   string                 `json:"justification"`
 }
+
+type ClaudeOrderValidationResponse struct {
+	ShouldOpenOrder   bool    `json:"should_open_order"`
+	ConfidencePercent float64 `json:"confidence_percent"`
+	Justification     string  `json:"justification"`
+}
