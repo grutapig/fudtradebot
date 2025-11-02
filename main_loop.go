@@ -162,7 +162,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 		log.Printf("[%s] Failed to get BTC price data: %v", pair.Symbol, err)
 		return err
 	}
-	coinKlines, err := exchange.Klines(pair.Symbol, KLINES_INTERVAL, 0, 0, 200)
+	coinKlines, err := exchange.Klines(pair.Symbol, KLINES_INTERVAL, 0, 0, 350)
 	if err != nil {
 		log.Printf("[%s] Failed to get coin price data: %v", pair.Symbol, err)
 		return err
@@ -184,108 +184,62 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	log.Printf("[%s] FUD activity trend: %v", pair.Symbol, fudActivityAnalysis.Trend)
 
 	sentiment := ClaudeSentimentResponse{}
-	if claudeClient != nil {
-		tweets, err := activityClient.GetRecentTweets(pair.CommunityID, 50)
-		if err != nil {
-			log.Printf("[%s] Failed to fetch tweets: %v", pair.Symbol, err)
-		} else if len(tweets) > 0 {
-			hasNewTweets := state.LastAnalyzedTweetID == "" || tweets[0].ID != state.LastAnalyzedTweetID
-			if hasNewTweets {
-				log.Printf("[%s] Analyzing %d tweets with Claude...", pair.Symbol, len(tweets))
-				sentimentAnalysis, err := FetchExternalSentimentAnalysis(pair.CommunityID)
-				if err != nil {
-					log.Printf("[%s] Claude analysis failed: %v", pair.Symbol, err)
-					if state.LastSentimentAnalysis.Confidence != 0 {
-						sentiment = state.LastSentimentAnalysis
-					}
-				} else {
-					log.Printf("[%s] Sentiment: %d/10, Trend: %s", pair.Symbol, sentimentAnalysis.OverallSentiment, sentimentAnalysis.SentimentTrend)
-					sentiment = sentimentAnalysis
-					state.LastSentimentAnalysis = sentimentAnalysis
-					state.LastAnalyzedTweetID = tweets[0].ID
-				}
-			} else {
-				sentiment = state.LastSentimentAnalysis
-			}
+	//Sentiment analyzer
+	sentimentAnalysis, err := FetchExternalSentimentAnalysis(pair.CommunityID)
+	if err != nil {
+		log.Printf("[%s] Claude analysis failed: %v", pair.Symbol, err)
+		if state.LastSentimentAnalysis.Confidence != 0 {
+			sentiment = state.LastSentimentAnalysis
 		}
+	} else {
+		log.Printf("[%s] Sentiment: %d/10, Trend: %s", pair.Symbol, sentimentAnalysis.OverallSentiment, sentimentAnalysis.SentimentTrend)
+		sentiment = sentimentAnalysis
+		state.LastSentimentAnalysis = sentimentAnalysis
 	}
 
-	if claudeClient != nil {
-		now := time.Now()
-		timeSinceLastCheck := now.Sub(state.LastFudCheckTime)
-		if timeSinceLastCheck >= 10*time.Minute || state.LastFudCheckTime.IsZero() {
-			tweets, err := activityClient.GetRecentTweets(pair.CommunityID, 200)
-			if err != nil {
-				log.Printf("[%s] Failed to fetch tweets for FUD check: %v", pair.Symbol, err)
-			} else if len(tweets) >= 3 {
-				newMessagesCount := 0
-				if state.LastFudCheckTweetID != "" && len(tweets) > 0 {
-					for i, tweet := range tweets {
-						if tweet.ID == state.LastFudCheckTweetID {
-							newMessagesCount = i
-							break
-						}
-					}
-					if newMessagesCount == 0 && len(tweets) > 0 && tweets[0].ID != state.LastFudCheckTweetID {
-						newMessagesCount = len(tweets)
-					}
-				} else {
-					newMessagesCount = len(tweets)
-				}
+	//fud ATTAck
+	fudAttack, err := FetchExternalFudAttackAnalysis(pair.CommunityID)
+	if err != nil {
+		log.Printf("[%s] FUD attack analysis failed: %v", pair.Symbol, err)
+	} else {
+		lastFudAttack = fudAttack
 
-				if newMessagesCount >= 3 {
-					log.Printf("[%s] Checking for coordinated FUD attack (%d new messages)...", pair.Symbol, newMessagesCount)
-					fudAttack, err := FetchExternalFudAttackAnalysis(pair.CommunityID)
-					if err != nil {
-						log.Printf("[%s] FUD attack analysis failed: %v", pair.Symbol, err)
-					} else {
-						lastFudAttack = fudAttack
-
-						if err := SaveFudAttack(fudAttack, pair.Symbol, state.PositionUUID); err != nil {
-							log.Printf("[%s] Failed to save FUD attack to database: %v", pair.Symbol, err)
-						} else {
-							log.Printf("[%s] FUD attack analysis saved to database", pair.Symbol)
-						}
-
-						log.Printf("\n[%s] ===== FUD ATTACK ANALYSIS =====", pair.Symbol)
-						if fudAttack.HasAttack {
-							log.Printf("[%s] ⚠️  COORDINATED FUD ATTACK DETECTED!", pair.Symbol)
-							log.Printf("[%s]   Confidence: %.0f%%", pair.Symbol, fudAttack.Confidence*100)
-							log.Printf("[%s]   Messages: %d", pair.Symbol, fudAttack.MessageCount)
-							log.Printf("[%s]   FUD Type: %s", pair.Symbol, fudAttack.FudType)
-							log.Printf("[%s]   Theme: %s", pair.Symbol, fudAttack.Theme)
-							log.Printf("[%s]   Started: %d hours ago", pair.Symbol, fudAttack.StartedHoursAgo)
-							log.Printf("[%s]   Last Attack Time: %s", pair.Symbol, fudAttack.LastAttackTime.Format("2006-01-02 15:04:05"))
-							log.Printf("[%s]   Participants:", pair.Symbol)
-							for _, p := range fudAttack.Participants {
-								log.Printf("[%s]     - %s (%d messages)", pair.Symbol, p.Username, p.MessageCount)
-							}
-							log.Printf("[%s]   Justification: %s", pair.Symbol, fudAttack.Justification)
-
-							timeSinceAttack := time.Since(fudAttack.LastAttackTime)
-							if timeSinceAttack <= 1*time.Hour && !state.FudAttackMode {
-								log.Printf("[%s] 🚨 ACTIVATING FUD ATTACK TRADING MODE (attack is fresh: %.0f min ago)", pair.Symbol, timeSinceAttack.Minutes())
-								state.FudAttackMode = true
-								state.FudAttackStartTime = fudAttack.LastAttackTime
-								state.FudAttackShortStarted = false
-							}
-						} else {
-							log.Printf("[%s] ✓ No coordinated FUD attack detected", pair.Symbol)
-							log.Printf("[%s]   Confidence: %.0f%%", pair.Symbol, fudAttack.Confidence*100)
-							log.Printf("[%s]   %s", pair.Symbol, fudAttack.Justification)
-						}
-						log.Printf("[%s] ================================\n", pair.Symbol)
-					}
-					state.LastFudCheckTime = now
-					if len(tweets) > 0 {
-						state.LastFudCheckTweetID = tweets[0].ID
-					}
-				} else {
-					log.Printf("[%s] Skipping FUD check: only %d new messages (need 3+)", pair.Symbol, newMessagesCount)
-				}
-			}
+		if err := SaveFudAttack(fudAttack, pair.Symbol, state.PositionUUID); err != nil {
+			log.Printf("[%s] Failed to save FUD attack to database: %v", pair.Symbol, err)
+		} else {
+			log.Printf("[%s] FUD attack analysis saved to database", pair.Symbol)
 		}
+
+		log.Printf("\n[%s] ===== FUD ATTACK ANALYSIS =====", pair.Symbol)
+		if fudAttack.HasAttack {
+			log.Printf("[%s] ⚠️  COORDINATED FUD ATTACK DETECTED!", pair.Symbol)
+			log.Printf("[%s]   Confidence: %.0f%%", pair.Symbol, fudAttack.Confidence*100)
+			log.Printf("[%s]   Messages: %d", pair.Symbol, fudAttack.MessageCount)
+			log.Printf("[%s]   FUD Type: %s", pair.Symbol, fudAttack.FudType)
+			log.Printf("[%s]   Theme: %s", pair.Symbol, fudAttack.Theme)
+			log.Printf("[%s]   Started: %d hours ago", pair.Symbol, fudAttack.StartedHoursAgo)
+			log.Printf("[%s]   Last Attack Time: %s", pair.Symbol, fudAttack.LastAttackTime.Format("2006-01-02 15:04:05"))
+			log.Printf("[%s]   Participants:", pair.Symbol)
+			for _, p := range fudAttack.Participants {
+				log.Printf("[%s]     - %s (%d messages)", pair.Symbol, p.Username, p.MessageCount)
+			}
+			log.Printf("[%s]   Justification: %s", pair.Symbol, fudAttack.Justification)
+
+			timeSinceAttack := time.Since(fudAttack.LastAttackTime)
+			if timeSinceAttack <= 1*time.Hour && !state.FudAttackMode {
+				log.Printf("[%s] 🚨 ACTIVATING FUD ATTACK TRADING MODE (attack is fresh: %.0f min ago)", pair.Symbol, timeSinceAttack.Minutes())
+				state.FudAttackMode = true
+				state.FudAttackStartTime = fudAttack.LastAttackTime
+				state.FudAttackShortStarted = false
+			}
+		} else {
+			log.Printf("[%s] ✓ No coordinated FUD attack detected", pair.Symbol)
+			log.Printf("[%s]   Confidence: %.0f%%", pair.Symbol, fudAttack.Confidence*100)
+			log.Printf("[%s]   %s", pair.Symbol, fudAttack.Justification)
+		}
+		log.Printf("[%s] ================================\n", pair.Symbol)
 	}
+	state.LastFudCheckTime = now
 
 	handledByFudMode, err := processFudAttackTradingCycle(exchange, pair, state, lastFudAttack, coinIchimoku.Analysis)
 	if err != nil {
@@ -658,7 +612,7 @@ func performAICloseAnalysis(claudeClient *claude.ClaudeApi, exchange AsterDexExc
 	if err != nil {
 		return false, fmt.Errorf("failed to get BTC klines: %w", err)
 	}
-	coinKlines, err := exchange.Klines(pair.Symbol, KLINES_INTERVAL, 0, 0, 200)
+	coinKlines, err := exchange.Klines(pair.Symbol, KLINES_INTERVAL, 0, 0, 350)
 	if err != nil {
 		return false, fmt.Errorf("failed to get coin klines: %w", err)
 	}
