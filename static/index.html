@@ -1,0 +1,1958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FUD Trading Bot - Dashboard</title>
+    <script src="/vue.global.js"></script>
+    <script src="/npm_chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 30px;
+            background: #1a1a1a;
+            border: 2px solid #ffffff;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            font-family: 'Orbitron', 'Courier New', monospace;
+            font-size: 2.2em;
+            color: #ffffff;
+            margin-bottom: 10px;
+            letter-spacing: 3px;
+            font-weight: 800;
+            text-transform: uppercase;
+            text-shadow: 
+                0 0 10px rgba(255, 255, 255, 0.8),
+                0 0 20px rgba(255, 255, 255, 0.6),
+                0 0 30px rgba(255, 255, 255, 0.4),
+                0 0 40px rgba(127, 184, 0, 0.3),
+                0 0 60px rgba(127, 184, 0, 0.2);
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 
+                    0 0 10px rgba(255, 255, 255, 0.8),
+                    0 0 20px rgba(255, 255, 255, 0.6),
+                    0 0 30px rgba(255, 255, 255, 0.4),
+                    0 0 40px rgba(127, 184, 0, 0.3),
+                    0 0 60px rgba(127, 184, 0, 0.2);
+            }
+            to {
+                text-shadow: 
+                    0 0 15px rgba(255, 255, 255, 1),
+                    0 0 25px rgba(255, 255, 255, 0.8),
+                    0 0 35px rgba(255, 255, 255, 0.6),
+                    0 0 50px rgba(127, 184, 0, 0.5),
+                    0 0 80px rgba(127, 184, 0, 0.3);
+            }
+        }
+
+        .chart-container {
+            background: #1a1a1a;
+            border: 2px solid #ffffff;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+        }
+
+        .chart-title {
+            color: #ffffff;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .result-positive {
+            color: #7fb800;
+        }
+
+        .result-negative {
+            color: #ff4444;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #1a1a1a;
+            border: 2px solid #ffffff;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #ffffff;
+        }
+
+        .modal-title {
+            font-size: 1.8em;
+            color: #ffffff;
+        }
+
+        .close-btn {
+            background: rgba(255, 68, 68, 0.3);
+            border: 2px solid #ff4444;
+            color: #ff4444;
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 68, 68, 0.5);
+        }
+
+        .modal-section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            color: #ffffff;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .info-label {
+            color: #888;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            color: #ffffff;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .history-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .history-action {
+            font-size: 1.1em;
+            color: #a89968;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .history-time {
+            color: #888;
+            font-size: 0.9em;
+        }
+
+        .history-reason {
+            color: #cccccc;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .trend-graph {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .trend-item {
+            background: rgba(25, 20, 10, 0.8);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            text-align: center;
+        }
+
+        .trend-label {
+            color: #888;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+
+        .trend-value {
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
+        .trend-up { color: #7fb800; }
+        .trend-down { color: #ff4444; }
+        .trend-flat { color: #d4af37; }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.5em;
+            color: #ffffff;
+        }
+
+        .decisions-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .decision-group {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .decision-group-header {
+            color: #ffffff;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .decision-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .decision-item {
+            background: #1a1a1a;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .decision-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(5px);
+            border-color: #ffffff;
+        }
+
+        .decision-time {
+            color: #888;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+
+        .decision-signals {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .decision-badge {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .badge-long {
+            background: rgba(127, 184, 0, 0.3);
+            border: 1px solid #7fb800;
+            color: #9fd936;
+        }
+
+        .badge-short {
+            background: rgba(255, 68, 68, 0.3);
+            border: 1px solid #ff4444;
+            color: #ff4444;
+        }
+
+        .badge-empty {
+            background: rgba(255, 170, 0, 0.3);
+            border: 1px solid #ffaa00;
+            color: #ffaa00;
+        }
+
+        .signal-icon {
+            font-size: 1.1em;
+            cursor: help;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .signal-icon:hover {
+            transform: scale(1.1);
+        }
+
+        .signal-bg-long {
+            background: rgba(127, 184, 0, 0.3);
+            border-color: #7fb800;
+        }
+
+        .signal-bg-short {
+            background: rgba(255, 68, 68, 0.3);
+            border-color: #ff4444;
+        }
+
+        .signal-bg-empty {
+            background: rgba(128, 128, 128, 0.3);
+            border-color: #888;
+        }
+
+        .fud-attack-warning {
+            color: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .explanation-text {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #cccccc;
+            line-height: 1.6;
+        }
+
+        .positions-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            padding: 10px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .position-card {
+            background: #1a1a1a;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .position-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
+            border-color: #ffffff;
+        }
+
+        .position-profit {
+            border-left: 4px solid #7fb800;
+        }
+
+        .position-loss {
+            border-left: 4px solid #ff4444;
+        }
+
+        .position-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .position-symbol {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        .position-side-badge {
+            padding: 6px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+
+        .position-side-badge.long {
+            background: rgba(127, 184, 0, 0.3);
+            border: 1px solid #7fb800;
+            color: #9fd936;
+        }
+
+        .position-side-badge.short {
+            background: rgba(255, 68, 68, 0.3);
+            border: 1px solid #ff4444;
+            color: #ff4444;
+        }
+
+        .position-info {
+            margin-bottom: 15px;
+        }
+
+        .position-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .position-info-row .label {
+            color: #888;
+            font-size: 0.9em;
+        }
+
+        .position-info-row .value {
+            color: #cccccc;
+            font-weight: bold;
+        }
+
+        .position-pl {
+            font-size: 1.8em;
+            font-weight: bold;
+            text-align: center;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .position-status {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .status-open {
+            color: #9fd936;
+            font-weight: bold;
+            padding: 4px 12px;
+            background: rgba(127, 184, 0, 0.2);
+            border-radius: 6px;
+        }
+
+        .status-closed {
+            color: #888;
+            font-weight: bold;
+            padding: 4px 12px;
+            background: rgba(128, 128, 128, 0.2);
+            border-radius: 6px;
+        }
+
+        .position-time {
+            color: #666;
+            font-size: 0.85em;
+            text-align: center;
+        }
+
+        .modal-position {
+            max-width: 1200px;
+        }
+
+        .decisions-list {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .decision-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 12px;
+        }
+
+        .decision-number {
+            display: inline-block;
+            background: rgba(212, 175, 55, 0.3);
+            color: #d4af37;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .snapshots-chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+
+        .chart-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .chart-toggle {
+            padding: 8px 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            color: #cccccc;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9em;
+        }
+
+        .chart-toggle.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #ffffff;
+            color: #ffffff;
+        }
+
+        .chart-toggle:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .header-icon-wrapper {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            border: 4px solid #ffffff;
+            box-shadow: 
+                0 0 20px rgba(255, 255, 255, 0.5),
+                0 0 40px rgba(127, 184, 0, 0.3),
+                0 0 60px rgba(127, 184, 0, 0.2);
+            animation: icon-pulse 3s ease-in-out infinite alternate;
+            background-image: url('icon.jpg');
+            background-size: 85%;
+            background-repeat: no-repeat;
+            background-position: center calc(50% + 8px);
+        }
+
+        @keyframes icon-pulse {
+            from {
+                box-shadow: 
+                    0 0 20px rgba(255, 255, 255, 0.5),
+                    0 0 40px rgba(127, 184, 0, 0.3),
+                    0 0 60px rgba(127, 184, 0, 0.2);
+                transform: scale(1);
+            }
+            to {
+                box-shadow: 
+                    0 0 30px rgba(255, 255, 255, 0.8),
+                    0 0 60px rgba(127, 184, 0, 0.5),
+                    0 0 90px rgba(127, 184, 0, 0.3);
+                transform: scale(1.05);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <div class="header-icon-wrapper"></div>
+                <h1>📊 GRUTA AI trading bot dashboard</h1>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Cumulative P/L History</div>
+                <div v-if="loadingPnl" class="loading">⚡ Loading...</div>
+                <div v-show="!loadingPnl">
+                    <canvas id="pnlChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Positions</div>
+                <div v-if="loadingPositions" class="loading">⚡ Loading...</div>
+                <template v-else>
+                    <div style="display: flex; gap: 30px; margin-bottom: 25px; flex-wrap: wrap; align-items: center; justify-content: center; padding: 20px; background: rgba(255, 255, 255, 0.03); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.2);">
+                        <span>
+                            <span style="color: #888; font-size: 0.9em;">24h P/L:</span>
+                            <span :class="positionsSummary.pnl_24h >= 0 ? 'result-positive' : 'result-negative'" style="font-weight: bold; margin-left: 8px; font-size: 1.4em;">
+                                {{ positionsSummary.pnl_24h >= 0 ? '+' : '' }}${{ positionsSummary.pnl_24h.toFixed(2) }}
+                                <span style="font-size: 0.7em; opacity: 0.8;">({{ positionsSummary.pnl_24h_percent >= 0 ? '+' : '' }}{{ positionsSummary.pnl_24h_percent.toFixed(2) }}%)</span>
+                            </span>
+                        </span>
+                        <span style="color: rgba(255, 255, 255, 0.3); font-size: 2em;">|</span>
+                        <span>
+                            <span style="color: #888; font-size: 0.9em;">7d P/L:</span>
+                            <span :class="positionsSummary.pnl_7d >= 0 ? 'result-positive' : 'result-negative'" style="font-weight: bold; margin-left: 8px; font-size: 1.4em;">
+                                {{ positionsSummary.pnl_7d >= 0 ? '+' : '' }}${{ positionsSummary.pnl_7d.toFixed(2) }}
+                                <span style="font-size: 0.7em; opacity: 0.8;">({{ positionsSummary.pnl_7d_percent >= 0 ? '+' : '' }}{{ positionsSummary.pnl_7d_percent.toFixed(2) }}%)</span>
+                            </span>
+                        </span>
+                    </div>
+                    <div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; font-size: 0.9em;">
+                        <span>
+                            <span style="color: #888;">Total Profit:</span>
+                            <span class="result-positive" style="font-weight: bold; margin-left: 5px;">
+                                +${{ positionsSummary.total_profit.toFixed(2) }}
+                                <span style="font-size: 0.85em; opacity: 0.8;">({{ positionsSummary.total_profit_percent >= 0 ? '+' : '' }}{{ positionsSummary.total_profit_percent.toFixed(2) }}%)</span>
+                            </span>
+                        </span>
+                        <span>
+                            <span style="color: #888;">Total Loss:</span>
+                            <span class="result-negative" style="font-weight: bold; margin-left: 5px;">
+                                ${{ positionsSummary.total_loss.toFixed(2) }}
+                                <span style="font-size: 0.85em; opacity: 0.8;">({{ positionsSummary.total_loss_percent.toFixed(2) }}%)</span>
+                            </span>
+                        </span>
+                        <span>
+                            <span style="color: #888;">Total P/L:</span>
+                            <span :class="positionsSummary.total_pnl >= 0 ? 'result-positive' : 'result-negative'" style="font-weight: bold; margin-left: 5px;">
+                                {{ positionsSummary.total_pnl >= 0 ? '+' : '' }}${{ positionsSummary.total_pnl.toFixed(2) }}
+                                <span style="font-size: 0.85em; opacity: 0.8;">({{ positionsSummary.total_pnl_percent >= 0 ? '+' : '' }}{{ positionsSummary.total_pnl_percent.toFixed(2) }}%)</span>
+                            </span>
+                        </span>
+                        <span>
+                            <span style="color: #888;">Long P/L:</span>
+                            <span :class="positionsSummary.long_pnl >= 0 ? 'result-positive' : 'result-negative'" style="font-weight: bold; margin-left: 5px;">
+                                {{ positionsSummary.long_pnl >= 0 ? '+' : '' }}${{ positionsSummary.long_pnl.toFixed(2) }}
+                                <span style="font-size: 0.85em; opacity: 0.8;">({{ positionsSummary.long_pnl_percent >= 0 ? '+' : '' }}{{ positionsSummary.long_pnl_percent.toFixed(2) }}%)</span>
+                            </span>
+                        </span>
+                        <span>
+                            <span style="color: #888;">Short P/L:</span>
+                            <span :class="positionsSummary.short_pnl >= 0 ? 'result-positive' : 'result-negative'" style="font-weight: bold; margin-left: 5px;">
+                                {{ positionsSummary.short_pnl >= 0 ? '+' : '' }}${{ positionsSummary.short_pnl.toFixed(2) }}
+                                <span style="font-size: 0.85em; opacity: 0.8;">({{ positionsSummary.short_pnl_percent >= 0 ? '+' : '' }}{{ positionsSummary.short_pnl_percent.toFixed(2) }}%)</span>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="positions-container">
+                        <div v-for="position in positions" :key="position.uuid" 
+                             class="position-card"
+                             :class="getPnLBorderClass(position)"
+                             @click="openPositionDetail(position.uuid)">
+                            <div class="position-header">
+                                <div class="position-symbol">{{ position.symbol }}</div>
+                                <div class="position-side-badge" :class="position.side.toLowerCase()">
+                                    {{ position.side }}
+                                </div>
+                            </div>
+                            <div class="position-info">
+                                <div class="position-info-row">
+                                    <span class="label">Entry:</span>
+                                    <span class="value">${{ position.entry_price.toFixed(4) }}</span>
+                                </div>
+                                <div class="position-info-row" v-if="position.is_closed">
+                                    <span class="label">Exit:</span>
+                                    <span class="value">${{ position.close_price.toFixed(4) }}</span>
+                                </div>
+                                <div class="position-info-row">
+                                    <span class="label">Quantity:</span>
+                                    <span class="value">{{ position.quantity.toFixed(4) }}</span>
+                                </div>
+                                <div class="position-info-row">
+                                    <span class="label">Leverage:</span>
+                                    <span class="value">{{ position.leverage }}x</span>
+                                </div>
+                            </div>
+                            <div class="position-pl" :class="getPnLClass(position)">
+                                {{ getPnLDisplay(position) }}
+                                <span style="font-size: 0.7em; margin-left: 8px;">
+                                    ({{ position.current_pnl_percent >= 0 ? '+' : '' }}{{ position.current_pnl_percent.toFixed(2) }}%)
+                                </span>
+                                <div v-if="position.max_pnl !== 0 || position.min_pnl !== 0" style="font-size: 0.5em; margin-top: 8px; opacity: 0.7; display: flex; gap: 15px; justify-content: center;">
+                                    <span class="result-positive">max: {{ position.max_pnl >= 0 ? '+' : '' }}${{ position.max_pnl.toFixed(2) }}</span>
+                                    <span class="result-negative">min: {{ position.min_pnl >= 0 ? '+' : '' }}${{ position.min_pnl.toFixed(2) }}</span>
+                                </div>
+                            </div>
+                            <div class="position-status">
+                                <span v-if="position.is_closed" class="status-closed">CLOSED</span>
+                                <span v-else class="status-open">OPEN</span>
+                            </div>
+                            <div class="position-time">
+                                {{ formatDateTime(position.opened_at) }}
+                                <span v-if="position.is_closed"> - {{ formatDateTime(position.closed_at) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Trading Signals</div>
+                <div v-if="loadingDecisions" class="loading">⚡ Loading...</div>
+                <template v-else>
+                    <div class="decisions-container" @scroll="handleDecisionScroll">
+                        <div v-for="(decisions, symbol) in groupedDecisions" :key="symbol" class="decision-group">
+                            <div class="decision-group-header">{{ symbol }}</div>
+                            <div class="decision-list">
+                                <div v-for="decision in getVisibleDecisions(decisions)" 
+                                     :key="decision.id" 
+                                     class="decision-item"
+                                     @click="openDecisionDetail(decision.id)">
+                                    <div class="decision-time">{{ formatTime(decision.created_at) }}</div>
+                                    <div class="decision-signals">
+                                        <span class="decision-badge" 
+                                              :class="'badge-' + decision.decision.toLowerCase()"
+                                              :title="getDecisionTooltip(decision.decision)">
+                                            {{ decision.decision }}
+                                        </span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.btc_ichimoku.toLowerCase()"
+                                              :title="getSignalTooltip('BTC Ichimoku', decision.btc_ichimoku)">₿</span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.coin_ichimoku.toLowerCase()"
+                                              :title="getSignalTooltip('Coin Ichimoku', decision.coin_ichimoku)">🪙</span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.activity.toLowerCase()"
+                                              :title="getSignalTooltip('Community Activity', decision.activity)">📊</span>
+                                        <span class="signal-icon" 
+                                              :class="'signal-bg-' + decision.sentiment.toLowerCase()"
+                                              :title="getSignalTooltip('Sentiment', decision.sentiment)">💭</span>
+                                        <span v-if="decision.fud_attack === 'yes'" 
+                                              class="signal-icon fud-attack-warning" 
+                                              title="⚠️ FUD Attack: Coordinated negative campaign detected">⚠️</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">🤖 AI Order Validations</div>
+                <div v-if="loadingAIValidations" class="loading">⚡ Loading...</div>
+                <template v-else>
+                    <div class="positions-container" @scroll="handleAIValidationsScroll">
+                        <div v-for="validation in getVisibleAIValidations(aiValidations)" :key="validation.id" 
+                             class="position-card"
+                             :class="validation.should_open_order ? 'position-profit' : 'position-loss'"
+                             @click="openAIValidationDetail(validation.id)">
+                            <div class="position-header">
+                                <div class="position-symbol">{{ validation.symbol }}</div>
+                                <div class="position-side-badge" :class="validation.should_open_order ? 'long' : 'short'">
+                                    {{ validation.should_open_order ? '✅ OPEN' : '❌ SKIP' }}
+                                </div>
+                            </div>
+                            <div class="position-info">
+                                <div class="position-info-row">
+                                    <span class="label">Confidence:</span>
+                                    <span class="value">{{ validation.confidence_percent.toFixed(1) }}%</span>
+                                </div>
+                                <div class="position-info-row">
+                                    <span class="label">Time:</span>
+                                    <span class="value" style="font-size: 0.85em;">{{ formatTime(validation.created_at) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">🔚 AI Position Close Analyses</div>
+                <div v-if="loadingAICloseAnalyses" class="loading">⚡ Loading...</div>
+                <template v-else>
+                    <div class="positions-container" @scroll="handleAICloseAnalysesScroll">
+                        <div v-for="analysis in getVisibleAICloseAnalyses(aiCloseAnalyses)" :key="analysis.id" 
+                             class="position-card"
+                             :class="analysis.should_close ? 'position-loss' : 'position-profit'"
+                             @click="openAICloseAnalysisDetail(analysis.id)">
+                            <div class="position-header">
+                                <div class="position-symbol">{{ analysis.symbol }}</div>
+                                <div class="position-side-badge" :class="analysis.should_close ? 'short' : 'long'">
+                                    {{ analysis.should_close ? '🚨 CLOSE' : '✅ HOLD' }}
+                                </div>
+                            </div>
+                            <div class="position-info">
+                                <div class="position-info-row">
+                                    <span class="label">Confidence:</span>
+                                    <span class="value">{{ analysis.confidence_percent.toFixed(1) }}%</span>
+                                </div>
+                                <div class="position-info-row">
+                                    <span class="label">Snapshots:</span>
+                                    <span class="value">{{ analysis.snapshot_count }}</span>
+                                </div>
+                                <div class="position-info-row">
+                                    <span class="label">Expected P/L:</span>
+                                    <span class="value" :class="analysis.expected_pnl >= 0 ? 'result-positive' : 'result-negative'">
+                                        {{ analysis.expected_pnl >= 0 ? '+' : '' }}${{ analysis.expected_pnl.toFixed(2) }}
+                                    </span>
+                                </div>
+                                <div class="position-info-row">
+                                    <span class="label">Risk:</span>
+                                    <span class="value">{{ analysis.risk_assessment }}</span>
+                                </div>
+                                <div class="position-info-row">
+                                    <span class="label">Time:</span>
+                                    <span class="value" style="font-size: 0.85em;">{{ formatTime(analysis.created_at) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="modal" :class="{ active: showDecisionModal }" @click.self="closeDecisionModal">
+                <div class="modal-content" v-if="selectedDecision">
+                    <div class="modal-header">
+                        <div class="modal-title">Decision Details: {{ selectedDecision.Symbol }}</div>
+                        <button class="close-btn" @click="closeDecisionModal">Close</button>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">Decision Information</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Final Decision</div>
+                                <div class="info-value" :class="'badge-' + selectedDecision.FinalDecision.toLowerCase()">
+                                    {{ selectedDecision.FinalDecision }}
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Position UUID</div>
+                                <div class="info-value" style="font-size: 0.8em;">{{ selectedDecision.PositionUUID || 'N/A' }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Date</div>
+                                <div class="info-value">{{ formatDateTime(selectedDecision.CreatedAt) }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">FUD Attack</div>
+                                <div class="info-value" :class="selectedDecision.FudAttack === 'yes' ? 'result-negative' : 'result-positive'">
+                                    {{ selectedDecision.FudAttack === 'yes' ? 'YES ⚠️' : 'NO' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">Signal Analysis</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">BTC Ichimoku</div>
+                                <div class="info-value">{{ selectedDecision.BTCIchimoku }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Coin Ichimoku</div>
+                                <div class="info-value">{{ selectedDecision.CoinIchimoku }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Activity</div>
+                                <div class="info-value">{{ selectedDecision.Activity }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Sentiment</div>
+                                <div class="info-value">{{ selectedDecision.Sentiment }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">Explanation</div>
+                        <div class="explanation-text">
+                            {{ selectedDecision.DecisionExplanation }}
+                        </div>
+                    </div>
+
+                    <div class="modal-section" v-if="decisionAIValidation">
+                        <div class="section-title">🤖 AI Order Validation</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Should Open Order</div>
+                                <div class="info-value" :class="decisionAIValidation.should_open_order ? 'result-positive' : 'result-negative'">
+                                    {{ decisionAIValidation.should_open_order ? '✅ YES' : '❌ NO' }}
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">AI Confidence</div>
+                                <div class="info-value">{{ decisionAIValidation.confidence_percent.toFixed(1) }}%</div>
+                            </div>
+                        </div>
+                        <div class="explanation-text" style="margin-top: 15px;">
+                            <strong>AI Justification:</strong><br>
+                            {{ decisionAIValidation.justification }}
+                        </div>
+                        <details style="margin-top: 15px;">
+                            <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📤 Request Data Sent to AI</summary>
+                            <div class="explanation-text" style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                                <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(decisionAIValidation.request_data), null, 2) }}</pre>
+                            </div>
+                        </details>
+                        <details style="margin-top: 10px;">
+                            <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📥 Response Data from AI</summary>
+                            <div class="explanation-text" style="margin-top: 10px;">
+                                <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(decisionAIValidation.response_data), null, 2) }}</pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal" :class="{ active: showPositionModal }" @click.self="closePositionModal">
+                <div class="modal-content modal-position" v-if="selectedPosition">
+                    <div class="modal-header">
+                        <div class="modal-title">Position Details: {{ selectedPosition.symbol }}</div>
+                        <button class="close-btn" @click="closePositionModal">Close</button>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">Position Information</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Side</div>
+                                <div class="info-value" :class="selectedPosition.side === 'LONG' ? 'result-positive' : 'result-negative'">
+                                    {{ selectedPosition.side }}
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Entry Price</div>
+                                <div class="info-value">${{ selectedPosition.entry_price.toFixed(4) }}</div>
+                            </div>
+                            <div class="info-item" v-if="selectedPosition.is_closed">
+                                <div class="info-label">Exit Price</div>
+                                <div class="info-value">${{ selectedPosition.close_price.toFixed(4) }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Quantity</div>
+                                <div class="info-value">{{ selectedPosition.quantity.toFixed(4) }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Leverage</div>
+                                <div class="info-value">{{ selectedPosition.leverage }}x</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">P/L</div>
+                                <div class="info-value" :class="selectedPosition.realized_pl >= 0 ? 'result-positive' : 'result-negative'">
+                                    {{ selectedPosition.realized_pl >= 0 ? '+' : '' }}${{ selectedPosition.realized_pl.toFixed(2) }}
+                                </div>
+                            </div>
+                            <div class="info-item" v-if="selectedPosition.max_pnl !== 0">
+                                <div class="info-label">Max P/L</div>
+                                <div class="info-value result-positive">
+                                    {{ selectedPosition.max_pnl >= 0 ? '+' : '' }}${{ selectedPosition.max_pnl.toFixed(2) }}
+                                </div>
+                            </div>
+                            <div class="info-item" v-if="selectedPosition.min_pnl !== 0">
+                                <div class="info-label">Min P/L</div>
+                                <div class="info-value result-negative">
+                                    {{ selectedPosition.min_pnl >= 0 ? '+' : '' }}${{ selectedPosition.min_pnl.toFixed(2) }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section" v-if="positionDecisions.length > 0">
+                        <div class="section-title">Trading Decisions ({{ positionDecisions.length }})</div>
+                        <div class="decisions-list">
+                            <div v-for="(decision, index) in positionDecisions.slice().reverse()" :key="decision.id" class="decision-card">
+                                <span class="decision-number">#{{ positionDecisions.length - index }}</span>
+                                <div class="decision-time">{{ formatDateTime(decision.created_at) }}</div>
+                                <div class="decision-signals" style="margin: 10px 0;">
+                                    <span class="decision-badge" :class="'badge-' + decision.final_decision.toLowerCase()">
+                                        {{ decision.final_decision }}
+                                    </span>
+                                    <span class="signal-icon" :class="'signal-bg-' + decision.btc_ichimoku.toLowerCase()" :title="decision.btc_ichimoku">₿</span>
+                                    <span class="signal-icon" :class="'signal-bg-' + decision.coin_ichimoku.toLowerCase()" :title="decision.coin_ichimoku">🪙</span>
+                                    <span class="signal-icon" :class="'signal-bg-' + decision.activity.toLowerCase()" :title="decision.activity">📊</span>
+                                    <span class="signal-icon" :class="'signal-bg-' + decision.sentiment.toLowerCase()" :title="decision.sentiment">💭</span>
+                                    <span v-if="decision.fud_attack === 'yes'" class="signal-icon fud-attack-warning" title="FUD Attack">⚠️</span>
+                                </div>
+                                <div class="explanation-text" style="margin-top: 10px;">
+                                    {{ decision.decision_explanation }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section" v-if="positionFudAttacks.length > 0">
+                        <div class="section-title">FUD Attack Analysis ({{ positionFudAttacks.length }})</div>
+                        <div class="decisions-list">
+                            <div v-for="attack in positionFudAttacks" :key="attack.id" class="decision-card" 
+                                 :style="attack.has_attack ? 'border-color: #ff4444;' : 'border-color: #7fb800;'">
+                                <div class="decision-time">{{ formatDateTime(attack.created_at) }}</div>
+                                <div class="info-grid" style="margin-top: 10px;">
+                                    <div class="info-item">
+                                        <div class="info-label">Attack Detected</div>
+                                        <div class="info-value" :class="attack.has_attack ? 'result-negative' : 'result-positive'">
+                                            {{ attack.has_attack ? 'YES ⚠️' : 'NO ✓' }}
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Confidence</div>
+                                        <div class="info-value">{{ (attack.confidence * 100).toFixed(0) }}%</div>
+                                    </div>
+                                    <div class="info-item" v-if="attack.has_attack">
+                                        <div class="info-label">FUD Type</div>
+                                        <div class="info-value">{{ attack.fud_type }}</div>
+                                    </div>
+                                    <div class="info-item" v-if="attack.has_attack">
+                                        <div class="info-label">Message Count</div>
+                                        <div class="info-value">{{ attack.message_count }}</div>
+                                    </div>
+                                    <div class="info-item" v-if="attack.has_attack">
+                                        <div class="info-label">Started</div>
+                                        <div class="info-value">{{ attack.started_hours_ago }}h ago</div>
+                                    </div>
+                                    <div class="info-item" v-if="attack.has_attack && attack.last_attack_time">
+                                        <div class="info-label">Last Attack</div>
+                                        <div class="info-value" style="font-size: 0.9em;">{{ formatDateTime(attack.last_attack_time) }}</div>
+                                    </div>
+                                </div>
+                                <div v-if="attack.has_attack && attack.theme" class="explanation-text" style="margin-top: 10px;">
+                                    <strong>Theme:</strong> {{ attack.theme }}
+                                </div>
+                                <div v-if="attack.has_attack && attack.participants" class="explanation-text" style="margin-top: 10px;">
+                                    <strong>Participants:</strong> {{ attack.participants }}
+                                </div>
+                                <div class="explanation-text" style="margin-top: 10px;">
+                                    {{ attack.justification }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section" v-if="positionAIValidations.length > 0">
+                        <div class="section-title">🤖 AI Order Validation ({{ positionAIValidations.length }})</div>
+                        <div class="decisions-list">
+                            <div v-for="validation in positionAIValidations" :key="validation.id" class="decision-card"
+                                 :style="validation.should_open_order ? 'border-color: #7fb800;' : 'border-color: #ff4444;'">
+                                <div class="decision-time">{{ formatDateTime(validation.created_at) }}</div>
+                                <div class="info-grid" style="margin-top: 10px;">
+                                    <div class="info-item">
+                                        <div class="info-label">Should Open Order</div>
+                                        <div class="info-value" :class="validation.should_open_order ? 'result-positive' : 'result-negative'">
+                                            {{ validation.should_open_order ? '✅ YES' : '❌ NO' }}
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">AI Confidence</div>
+                                        <div class="info-value">{{ validation.confidence_percent.toFixed(1) }}%</div>
+                                    </div>
+                                </div>
+                                <div class="explanation-text" style="margin-top: 15px;">
+                                    <strong>AI Justification:</strong><br>
+                                    {{ validation.justification }}
+                                </div>
+                                <details style="margin-top: 15px;">
+                                    <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📤 Request Data Sent to AI</summary>
+                                    <div class="explanation-text" style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(validation.request_data), null, 2) }}</pre>
+                                    </div>
+                                </details>
+                                <details style="margin-top: 10px;">
+                                    <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📥 Response Data from AI</summary>
+                                    <div class="explanation-text" style="margin-top: 10px;">
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(validation.response_data), null, 2) }}</pre>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section" v-if="positionAICloseAnalyses.length > 0">
+                        <div class="section-title">🔚 AI Close Analyses ({{ positionAICloseAnalyses.length }})</div>
+                        <div class="decisions-list">
+                            <div v-for="analysis in positionAICloseAnalyses" :key="analysis.id" class="decision-card"
+                                 :style="analysis.should_close ? 'border-color: #ff4444;' : 'border-color: #7fb800;'">
+                                <div class="decision-time">{{ formatDateTime(analysis.created_at) }}</div>
+                                <div class="info-grid" style="margin-top: 10px;">
+                                    <div class="info-item">
+                                        <div class="info-label">Should Close</div>
+                                        <div class="info-value" :class="analysis.should_close ? 'result-negative' : 'result-positive'">
+                                            {{ analysis.should_close ? '🚨 CLOSE' : '✅ HOLD' }}
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">AI Confidence</div>
+                                        <div class="info-value">{{ analysis.confidence_percent.toFixed(1) }}%</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Expected P/L</div>
+                                        <div class="info-value" :class="analysis.expected_pnl >= 0 ? 'result-positive' : 'result-negative'">
+                                            {{ analysis.expected_pnl >= 0 ? '+' : '' }}${{ analysis.expected_pnl.toFixed(2) }}
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Risk Assessment</div>
+                                        <div class="info-value">{{ analysis.risk_assessment }}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Snapshots Analyzed</div>
+                                        <div class="info-value">{{ analysis.snapshot_count }}</div>
+                                    </div>
+                                </div>
+                                <div class="explanation-text" style="margin-top: 15px;">
+                                    <strong>AI Justification:</strong><br>
+                                    {{ analysis.justification }}
+                                </div>
+                                <details style="margin-top: 15px;">
+                                    <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📤 Request Data Sent to AI</summary>
+                                    <div class="explanation-text" style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(analysis.request_data), null, 2) }}</pre>
+                                    </div>
+                                </details>
+                                <details style="margin-top: 10px;">
+                                    <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📥 Response Data from AI</summary>
+                                    <div class="explanation-text" style="margin-top: 10px;">
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(analysis.response_data), null, 2) }}</pre>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section" v-if="positionSnapshots.length > 0">
+                        <div class="section-title">Snapshots History</div>
+                        <div class="chart-controls">
+                            <button 
+                                class="chart-toggle" 
+                                :class="{ active: chartMode === 'pnl' }"
+                                @click="chartMode = 'pnl'; renderSnapshotsChart()">
+                                P/L
+                            </button>
+                            <button 
+                                class="chart-toggle" 
+                                :class="{ active: chartMode === 'price' }"
+                                @click="chartMode = 'price'; renderSnapshotsChart()">
+                                Price
+                            </button>
+                        </div>
+                        <div class="snapshots-chart-container">
+                            <canvas id="snapshotsChart"></canvas>
+                        </div>
+                        <div class="decisions-list" style="margin-top: 20px;">
+                            <div v-for="snapshot in positionSnapshots.slice().reverse()" :key="snapshot.id" class="decision-card">
+                                <div class="decision-time">{{ formatDateTime(snapshot.created_at) }}</div>
+                                <div class="info-grid" style="margin-top: 10px;">
+                                    <div class="info-item">
+                                        <div class="info-label">Mark Price</div>
+                                        <div class="info-value">${{ snapshot.mark_price.toFixed(4) }}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Entry Price</div>
+                                        <div class="info-value">${{ snapshot.entry_price.toFixed(4) }}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Unrealized P/L</div>
+                                        <div class="info-value" :class="snapshot.unrealized_pl >= 0 ? 'result-positive' : 'result-negative'">
+                                            {{ snapshot.unrealized_pl >= 0 ? '+' : '' }}${{ snapshot.unrealized_pl.toFixed(2) }}
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Amount</div>
+                                        <div class="info-value">{{ snapshot.amount.toFixed(4) }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal" :class="{ active: showAIValidationModal }" @click.self="closeAIValidationModal">
+                <div class="modal-content" v-if="selectedAIValidation">
+                    <div class="modal-header">
+                        <div class="modal-title">🤖 AI Validation: {{ selectedAIValidation.symbol }}</div>
+                        <button class="close-btn" @click="closeAIValidationModal">Close</button>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">Decision</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Should Open Order</div>
+                                <div class="info-value" :class="selectedAIValidation.should_open_order ? 'result-positive' : 'result-negative'">
+                                    {{ selectedAIValidation.should_open_order ? '✅ YES' : '❌ NO' }}
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">AI Confidence</div>
+                                <div class="info-value">{{ selectedAIValidation.confidence_percent.toFixed(1) }}%</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Symbol</div>
+                                <div class="info-value">{{ selectedAIValidation.symbol }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Date</div>
+                                <div class="info-value">{{ formatDateTime(selectedAIValidation.created_at) }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">AI Justification</div>
+                        <div class="explanation-text">
+                            {{ selectedAIValidation.justification }}
+                        </div>
+                    </div>
+
+                    <details style="margin-top: 15px;">
+                        <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📤 Request Data Sent to AI</summary>
+                        <div class="explanation-text" style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(selectedAIValidation.request_data), null, 2) }}</pre>
+                        </div>
+                    </details>
+                    <details style="margin-top: 10px;">
+                        <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📥 Response Data from AI</summary>
+                        <div class="explanation-text" style="margin-top: 10px;">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(selectedAIValidation.response_data), null, 2) }}</pre>
+                        </div>
+                    </details>
+                </div>
+            </div>
+
+            <div class="modal" :class="{ active: showAICloseAnalysisModal }" @click.self="closeAICloseAnalysisModal">
+                <div class="modal-content" v-if="selectedAICloseAnalysis">
+                    <div class="modal-header">
+                        <div class="modal-title">🔚 AI Close Analysis: {{ selectedAICloseAnalysis.symbol }}</div>
+                        <button class="close-btn" @click="closeAICloseAnalysisModal">Close</button>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">Decision</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Should Close</div>
+                                <div class="info-value" :class="selectedAICloseAnalysis.should_close ? 'result-negative' : 'result-positive'">
+                                    {{ selectedAICloseAnalysis.should_close ? '🚨 CLOSE' : '✅ HOLD' }}
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">AI Confidence</div>
+                                <div class="info-value">{{ selectedAICloseAnalysis.confidence_percent.toFixed(1) }}%</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Expected P/L</div>
+                                <div class="info-value" :class="selectedAICloseAnalysis.expected_pnl >= 0 ? 'result-positive' : 'result-negative'">
+                                    {{ selectedAICloseAnalysis.expected_pnl >= 0 ? '+' : '' }}${{ selectedAICloseAnalysis.expected_pnl.toFixed(2) }}
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Risk Assessment</div>
+                                <div class="info-value">{{ selectedAICloseAnalysis.risk_assessment }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Snapshots Analyzed</div>
+                                <div class="info-value">{{ selectedAICloseAnalysis.snapshot_count }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Date</div>
+                                <div class="info-value">{{ formatDateTime(selectedAICloseAnalysis.created_at) }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-section">
+                        <div class="section-title">AI Justification</div>
+                        <div class="explanation-text">
+                            {{ selectedAICloseAnalysis.justification }}
+                        </div>
+                    </div>
+
+                    <details style="margin-top: 15px;">
+                        <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📤 Request Data Sent to AI</summary>
+                        <div class="explanation-text" style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(selectedAICloseAnalysis.request_data), null, 2) }}</pre>
+                        </div>
+                    </details>
+                    <details style="margin-top: 10px;">
+                        <summary style="cursor: pointer; color: #d4af37; font-weight: bold; margin-bottom: 10px;">📥 Response Data from AI</summary>
+                        <div class="explanation-text" style="margin-top: 10px;">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em;">{{ JSON.stringify(JSON.parse(selectedAICloseAnalysis.response_data), null, 2) }}</pre>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    loadingPnl: true,
+                    loadingPositions: true,
+                    loadingDecisions: true,
+                    loadingAIValidations: true,
+                    loadingAICloseAnalyses: true,
+                    decisions: {},
+                    positions: [],
+                    positionsSummary: {
+                        total_profit: 0,
+                        total_loss: 0,
+                        total_pnl: 0,
+                        long_pnl: 0,
+                        short_pnl: 0,
+                        total_pnl_percent: 0,
+                        total_profit_percent: 0,
+                        total_loss_percent: 0,
+                        long_pnl_percent: 0,
+                        short_pnl_percent: 0,
+                        pnl_24h: 0,
+                        pnl_24h_percent: 0,
+                        pnl_7d: 0,
+                        pnl_7d_percent: 0
+                    },
+                    pnlHistory: [],
+                    showDecisionModal: false,
+                    selectedDecision: null,
+                    showPositionModal: false,
+                    selectedPosition: null,
+                    positionDecisions: [],
+                    positionSnapshots: [],
+                    positionFudAttacks: [],
+                    positionAIValidations: [],
+                    decisionAIValidation: null,
+                    aiValidations: [],
+                    selectedAIValidation: null,
+                    showAIValidationModal: false,
+                    aiCloseAnalyses: [],
+                    selectedAICloseAnalysis: null,
+                    showAICloseAnalysisModal: false,
+                    pnlChart: null,
+                    snapshotsChart: null,
+                    chartMode: 'pnl',
+                    visibleDecisionsCount: 20,
+                    visibleAIValidationsCount: 20,
+                    visibleAICloseAnalysesCount: 20,
+                    positionAICloseAnalyses: []
+                }
+            },
+            computed: {
+                groupedDecisions() {
+                    return this.decisions;
+                }
+            },
+            methods: {
+                async fetchData() {
+                    this.fetchPnLHistory();
+                    this.fetchPositions();
+                    this.fetchDecisions();
+                    this.fetchAIValidations();
+                    this.fetchAICloseAnalyses();
+                },
+                async fetchPnLHistory() {
+                    try {
+                        const pnlRes = await fetch('/api/pnl-history');
+                        const pnlData = await pnlRes.json();
+                        this.pnlHistory = pnlData.history || [];
+                        this.renderPnLChart();
+                    } catch (err) {
+                        console.error('Failed to fetch P/L history:', err);
+                    } finally {
+                        this.loadingPnl = false;
+                    }
+                },
+                async fetchPositions() {
+                    try {
+                        const positionsRes = await fetch('/api/positions');
+                        const positionsData = await positionsRes.json();
+                        this.positions = positionsData.positions || [];
+                        this.positionsSummary = {
+                            total_profit: positionsData.total_profit_positions || 0,
+                            total_loss: positionsData.total_loss_positions || 0,
+                            total_pnl: positionsData.total_pnl || 0,
+                            long_pnl: positionsData.total_long_pnl || 0,
+                            short_pnl: positionsData.total_short_pnl || 0,
+                            total_pnl_percent: positionsData.total_pnl_percent || 0,
+                            total_profit_percent: positionsData.total_profit_percent || 0,
+                            total_loss_percent: positionsData.total_loss_percent || 0,
+                            long_pnl_percent: positionsData.total_long_pnl_percent || 0,
+                            short_pnl_percent: positionsData.total_short_pnl_percent || 0
+                        };
+                        this.calculateTimePeriodPnL();
+                    } catch (err) {
+                        console.error('Failed to fetch positions:', err);
+                    } finally {
+                        this.loadingPositions = false;
+                    }
+                },
+                async fetchDecisions() {
+                    try {
+                        const decisionsRes = await fetch('/api/decisions');
+                        const decisionsData = await decisionsRes.json();
+                        this.decisions = decisionsData.decisions || {};
+                    } catch (err) {
+                        console.error('Failed to fetch decisions:', err);
+                    } finally {
+                        this.loadingDecisions = false;
+                    }
+                },
+                async fetchAIValidations() {
+                    try {
+                        const aiValidationsRes = await fetch('/api/recent-ai-validations');
+                        const aiValidationsData = await aiValidationsRes.json();
+                        this.aiValidations = aiValidationsData.validations || [];
+                    } catch (err) {
+                        console.error('Failed to fetch AI validations:', err);
+                    } finally {
+                        this.loadingAIValidations = false;
+                    }
+                },
+                async fetchAICloseAnalyses() {
+                    try {
+                        const aiCloseAnalysesRes = await fetch('/api/ai-close-analyses');
+                        const aiCloseAnalysesData = await aiCloseAnalysesRes.json();
+                        this.aiCloseAnalyses = aiCloseAnalysesData.ai_close_analyses || [];
+                    } catch (err) {
+                        console.error('Failed to fetch AI close analyses:', err);
+                    } finally {
+                        this.loadingAICloseAnalyses = false;
+                    }
+                },
+                calculateTimePeriodPnL() {
+                    if (!this.positions || this.positions.length === 0) {
+                        return;
+                    }
+
+                    const now = new Date();
+                    const time24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                    const time7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+                    let pnl24h = 0;
+                    let pnl7d = 0;
+                    let margin24h = 0;
+                    let margin7d = 0;
+
+                    this.positions.forEach(pos => {
+                        const closedAt = pos.closed_at ? new Date(pos.closed_at) : now;
+                        const initialMargin = pos.quantity > 0 && pos.leverage > 0 && pos.entry_price > 0 
+                            ? (pos.entry_price * pos.quantity) / pos.leverage 
+                            : 0;
+
+                        if (closedAt >= time24h) {
+                            pnl24h += pos.current_pnl || 0;
+                            margin24h += initialMargin;
+                        }
+                        if (closedAt >= time7d) {
+                            pnl7d += pos.current_pnl || 0;
+                            margin7d += initialMargin;
+                        }
+                    });
+
+                    this.positionsSummary.pnl_24h = pnl24h;
+                    this.positionsSummary.pnl_24h_percent = margin24h > 0 ? (pnl24h / margin24h) * 100 : 0;
+                    this.positionsSummary.pnl_7d = pnl7d;
+                    this.positionsSummary.pnl_7d_percent = margin7d > 0 ? (pnl7d / margin7d) * 100 : 0;
+                },
+                renderPnLChart() {
+                    const ctx = document.getElementById('pnlChart');
+                    
+                    if (!ctx) {
+                        return;
+                    }
+                    
+                    if (this.pnlChart) {
+                        this.pnlChart.destroy();
+                    }
+
+                    if (!this.pnlHistory || this.pnlHistory.length === 0) {
+                        return;
+                    }
+
+                    const labels = this.pnlHistory.map(p => {
+                        const date = new Date(p.timestamp);
+                        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                        const day = date.getDate().toString().padStart(2, '0');
+                        const hours = date.getHours().toString().padStart(2, '0');
+                        const minutes = date.getMinutes().toString().padStart(2, '0');
+                        return `${month}-${day} ${hours}:${minutes}`;
+                    });
+
+                    const data = this.pnlHistory.map(p => p.cumulative_pnl);
+
+                    this.pnlChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'P/L',
+                                data: data,
+                                borderColor: '#ffffff',
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                tension: 0.4,
+                                fill: false,
+                                pointRadius: 0,
+                                pointHoverRadius: 4,
+                                pointBackgroundColor: '#ffffff',
+                                pointBorderColor: '#ffffff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.parsed.y.toFixed(2);
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    ticks: {
+                                        color: '#888',
+                                        font: {
+                                            family: "'Courier New', monospace",
+                                            size: 11
+                                        },
+                                        callback: function(value) {
+                                            return value.toFixed(2);
+                                        }
+                                    },
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)',
+                                        drawBorder: false
+                                    },
+                                    border: {
+                                        display: false
+                                    }
+                                },
+                                x: {
+                                    ticks: {
+                                        color: '#888',
+                                        font: {
+                                            family: "'Courier New', monospace",
+                                            size: 11
+                                        },
+                                        maxRotation: 0,
+                                        minRotation: 0,
+                                        autoSkip: true,
+                                        maxTicksLimit: 8
+                                    },
+                                    grid: {
+                                        display: false
+                                    },
+                                    border: {
+                                        display: false
+                                    }
+                                }
+                            }
+                        }
+                    });
+                },
+                async openDecisionDetail(decisionId) {
+                    try {
+                        const response = await fetch(`/api/decision-detail?id=${decisionId}`);
+                        this.selectedDecision = await response.json();
+                        
+                        const aiValRes = await fetch(`/api/ai-validations?decision_id=${decisionId}`);
+                        const aiValData = await aiValRes.json();
+                        this.decisionAIValidation = aiValData.ai_validations && aiValData.ai_validations.length > 0 
+                            ? aiValData.ai_validations[0] 
+                            : null;
+                        
+                        this.showDecisionModal = true;
+                    } catch (err) {
+                        console.error('Failed to fetch decision details:', err);
+                    }
+                },
+                closeDecisionModal() {
+                    this.showDecisionModal = false;
+                    this.selectedDecision = null;
+                    this.decisionAIValidation = null;
+                },
+                async openAIValidationDetail(validationId) {
+                    try {
+                        const response = await fetch(`/api/ai-validations?id=${validationId}`);
+                        const data = await response.json();
+                        
+                        if (data.ai_validations && data.ai_validations.length > 0) {
+                            this.selectedAIValidation = data.ai_validations[0];
+                            this.showAIValidationModal = true;
+                        }
+                    } catch (err) {
+                        console.error('Failed to fetch AI validation details:', err);
+                    }
+                },
+                closeAIValidationModal() {
+                    this.showAIValidationModal = false;
+                    this.selectedAIValidation = null;
+                },
+                async openAICloseAnalysisDetail(analysisId) {
+                    try {
+                        const response = await fetch(`/api/ai-close-analyses?id=${analysisId}`);
+                        const data = await response.json();
+                        
+                        if (data.ai_close_analyses && data.ai_close_analyses.length > 0) {
+                            this.selectedAICloseAnalysis = data.ai_close_analyses[0];
+                            this.showAICloseAnalysisModal = true;
+                        }
+                    } catch (err) {
+                        console.error('Failed to fetch AI close analysis details:', err);
+                    }
+                },
+                closeAICloseAnalysisModal() {
+                    this.showAICloseAnalysisModal = false;
+                    this.selectedAICloseAnalysis = null;
+                },
+                async openPositionDetail(positionUUID) {
+                    try {
+                        const position = this.positions.find(p => p.uuid === positionUUID);
+                        if (!position) return;
+
+                        this.selectedPosition = position;
+
+                        const [decisionsRes, snapshotsRes, fudAttacksRes, aiValidationsRes, aiCloseAnalysesRes] = await Promise.all([
+                            fetch(`/api/position-decisions?position_uuid=${positionUUID}`),
+                            fetch(`/api/position-snapshots?position_uuid=${positionUUID}`),
+                            fetch(`/api/fud-attacks?position_uuid=${positionUUID}`),
+                            fetch(`/api/ai-validations?position_uuid=${positionUUID}`),
+                            fetch(`/api/ai-close-analyses?position_uuid=${positionUUID}`)
+                        ]);
+
+                        const decisionsData = await decisionsRes.json();
+                        const snapshotsData = await snapshotsRes.json();
+                        const fudAttacksData = await fudAttacksRes.json();
+                        const aiValidationsData = await aiValidationsRes.json();
+                        const aiCloseAnalysesData = await aiCloseAnalysesRes.json();
+
+                        this.positionDecisions = decisionsData.decisions || [];
+                        this.positionSnapshots = snapshotsData.snapshots || [];
+                        this.positionFudAttacks = fudAttacksData.fud_attacks || [];
+                        this.positionAIValidations = aiValidationsData.ai_validations || [];
+                        this.positionAICloseAnalyses = aiCloseAnalysesData.ai_close_analyses || [];
+
+                        this.showPositionModal = true;
+
+                        await this.$nextTick();
+                        this.renderSnapshotsChart();
+                    } catch (err) {
+                        console.error('Failed to fetch position details:', err);
+                    }
+                },
+                closePositionModal() {
+                    this.showPositionModal = false;
+                    this.selectedPosition = null;
+                    this.positionDecisions = [];
+                    this.positionSnapshots = [];
+                    this.positionFudAttacks = [];
+                    this.positionAIValidations = [];
+                    this.positionAICloseAnalyses = [];
+                    if (this.snapshotsChart) {
+                        this.snapshotsChart.destroy();
+                        this.snapshotsChart = null;
+                    }
+                },
+                handleDecisionScroll(event) {
+                    const container = event.target;
+                    const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+                    if (scrollBottom < 100) {
+                        this.visibleDecisionsCount += 20;
+                    }
+                },
+                getVisibleDecisions(decisions) {
+                    return decisions.slice(0, Math.min(this.visibleDecisionsCount, decisions.length));
+                },
+                handleAIValidationsScroll(event) {
+                    const container = event.target;
+                    const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+                    if (scrollBottom < 100) {
+                        this.visibleAIValidationsCount += 20;
+                    }
+                },
+                getVisibleAIValidations(validations) {
+                    return validations.slice(0, Math.min(this.visibleAIValidationsCount, validations.length));
+                },
+                handleAICloseAnalysesScroll(event) {
+                    const container = event.target;
+                    const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+                    if (scrollBottom < 100) {
+                        this.visibleAICloseAnalysesCount += 20;
+                    }
+                },
+                getVisibleAICloseAnalyses(analyses) {
+                    return analyses.slice(0, Math.min(this.visibleAICloseAnalysesCount, analyses.length));
+                },
+                renderSnapshotsChart() {
+                    const ctx = document.getElementById('snapshotsChart');
+                    if (!ctx || !this.positionSnapshots || this.positionSnapshots.length === 0) {
+                        return;
+                    }
+
+                    if (this.snapshotsChart) {
+                        this.snapshotsChart.destroy();
+                    }
+
+                    let datasets = [];
+                    
+                    if (this.chartMode === 'pnl') {
+                        datasets = [{
+                            label: 'Unrealized P/L',
+                            data: this.positionSnapshots.map(s => s.unrealized_pl),
+                            borderColor: '#ffffff',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: false,
+                            pointRadius: 2,
+                            pointHoverRadius: 5
+                        }];
+                    } else {
+                        datasets = [
+                            {
+                                label: 'Mark Price',
+                                data: this.positionSnapshots.map(s => s.mark_price),
+                                borderColor: '#ffffff',
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                tension: 0.4,
+                                fill: false,
+                                pointRadius: 2,
+                                pointHoverRadius: 5
+                            },
+                            {
+                                label: 'Entry Price',
+                                data: this.positionSnapshots.map(s => s.entry_price),
+                                borderColor: '#888888',
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                tension: 0.4,
+                                fill: false,
+                                pointRadius: 2,
+                                pointHoverRadius: 5
+                            }
+                        ];
+                    }
+
+                    this.snapshotsChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: this.positionSnapshots.map(s => {
+                                const date = new Date(s.created_at);
+                                return date.toLocaleString('en-US', { 
+                                    month: 'short', 
+                                    day: 'numeric', 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                });
+                            }),
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    labels: {
+                                        color: '#ffffff',
+                                        font: {
+                                            family: "'Courier New', monospace",
+                                            size: 12
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    ticks: {
+                                        color: '#888',
+                                        font: {
+                                            family: "'Courier New', monospace"
+                                        }
+                                    },
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)'
+                                    }
+                                },
+                                x: {
+                                    ticks: {
+                                        color: '#888',
+                                        font: {
+                                            family: "'Courier New', monospace"
+                                        },
+                                        maxRotation: 45,
+                                        minRotation: 45
+                                    },
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                },
+                formatDate(date) {
+                    return new Date(date).toLocaleDateString();
+                },
+                formatDateTime(date) {
+                    return new Date(date).toLocaleString();
+                },
+                formatTime(date) {
+                    const d = new Date(date);
+                    return d.toLocaleString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                },
+                getDecisionTooltip(decision) {
+                    const tooltips = {
+                        'LONG': 'LONG: Open a buy position - expecting price to go up',
+                        'SHORT': 'SHORT: Open a sell position - expecting price to go down',
+                        'EMPTY': 'EMPTY: No clear signal - conflicting indicators or insufficient data. Position will be closed if open, or no action taken if no position.'
+                    };
+                    return tooltips[decision] || decision;
+                },
+                getSignalTooltip(indicator, status) {
+                    const descriptions = {
+                        'BTC Ichimoku': {
+                            'LONG': '₿ BTC Ichimoku: LONG - Bitcoin trend is bullish',
+                            'SHORT': '₿ BTC Ichimoku: SHORT - Bitcoin trend is bearish',
+                            'EMPTY': '₿ BTC Ichimoku: EMPTY - Bitcoin trend is neutral or unclear'
+                        },
+                        'Coin Ichimoku': {
+                            'LONG': '🪙 Coin Ichimoku: LONG - Coin trend is bullish',
+                            'SHORT': '🪙 Coin Ichimoku: SHORT - Coin trend is bearish',
+                            'EMPTY': '🪙 Coin Ichimoku: EMPTY - Coin trend is neutral or unclear'
+                        },
+                        'Community Activity': {
+                            'LONG': '📊 Community Activity: LONG - Sharp rise in community engagement',
+                            'SHORT': '📊 Community Activity: SHORT - Sharp drop in community engagement',
+                            'EMPTY': '📊 Community Activity: EMPTY - No significant change in activity'
+                        },
+                        'FUD Activity': {
+                            'SHORT': '⚡ FUD Activity: SHORT - Sharp rise in FUD/negative sentiment',
+                            'EMPTY': '⚡ FUD Activity: EMPTY - No significant FUD activity detected'
+                        },
+                        'Sentiment': {
+                            'SHORT': '💭 Sentiment: SHORT - Declining sentiment with low score',
+                            'EMPTY': '💭 Sentiment: EMPTY - Sentiment is stable or cannot generate signal alone'
+                        }
+                    };
+                    
+                    if (descriptions[indicator] && descriptions[indicator][status]) {
+                        return descriptions[indicator][status];
+                    }
+                    return `${indicator}: ${status}`;
+                },
+                getTrendClass(trend) {
+                    if (trend === 'LONG') return 'trend-up';
+                    if (trend === 'SHORT') return 'trend-down';
+                    return 'trend-flat';
+                },
+                getPnLClass(position) {
+                    const pnl = position.current_pnl || 0;
+                    return pnl >= 0 ? 'result-positive' : 'result-negative';
+                },
+                getPnLDisplay(position) {
+                    const pnl = position.current_pnl || 0;
+                    return (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+                },
+                getPnLBorderClass(position) {
+                    const pnl = position.current_pnl || 0;
+                    return pnl >= 0 ? 'position-profit' : 'position-loss';
+                }
+            },
+            mounted() {
+                this.fetchData();
+                setInterval(() => this.fetchData(), 30000);
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

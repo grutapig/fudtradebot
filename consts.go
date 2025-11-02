@@ -1,0 +1,20 @@
+package main
+
+const (
+	ENV_DATABASE_DSN_INFO           = "DATABASE_DSN_INFO"
+	ENV_DATABASE_DSN_TRADE          = "DATABASE_DSN_TRADE"
+	ENV_CLAUDE_API_KEY              = "CLAUDE_API_KEY"
+	ENV_DEX_KEY                     = "DEX_KEY"
+	ENV_DEX_SECRET                  = "DEX_SECRET"
+	ENV_PROXY_DSN                   = "PROXY_DSN"
+	ENV_GRUFENDER_API_URL           = "GRUFENDER_API_URL"
+	ENV_CLAUDE_MIN_INTERVAL_MINUTES = "CLAUDE_MIN_INTERVAL_MINUTES"
+	ENV_API_EXTERNAL_SECRET         = "API_EXTERNAL_SECRET"
+)
+
+const (
+	PROMPT_FILE_ANALYZE  = "prompt_analyze.txt"
+	PROMPT_FILE_DECISION = "prompt_decision.txt"
+)
+const KLINES_INTERVAL = "1h"
+const KLINES_BTC_INTERVAL = "4h"

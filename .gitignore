@@ -1,0 +1,9 @@
+.idea/
+.env
+*.db
+todos/
+claude.md
+docs/long.md
+deploy_prod.sh
+vendor
+.claude
