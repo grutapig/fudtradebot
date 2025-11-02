@@ -184,32 +184,50 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	log.Printf("[%s] FUD activity trend: %v", pair.Symbol, fudActivityAnalysis.Trend)
 
 	sentiment := ClaudeSentimentResponse{}
-	//Sentiment analyzer
-	sentimentAnalysis, err := FetchExternalSentimentAnalysis(pair.CommunityID)
-	if err != nil {
-		log.Printf("[%s] Claude analysis failed: %v", pair.Symbol, err)
-		if state.LastSentimentAnalysis.Confidence != 0 {
-			sentiment = state.LastSentimentAnalysis
-		}
+	if time.Since(state.LastSentimentFetchTime) < 20*time.Minute && state.LastSentimentAnalysis.Confidence != 0 {
+		sentiment = state.LastSentimentAnalysis
+		log.Printf("[%s] Using cached sentiment (last fetch: %v ago)", pair.Symbol, time.Since(state.LastSentimentFetchTime).Round(time.Second))
 	} else {
-		log.Printf("[%s] Sentiment: %d/10, Trend: %s", pair.Symbol, sentimentAnalysis.OverallSentiment, sentimentAnalysis.SentimentTrend)
-		sentiment = sentimentAnalysis
-		state.LastSentimentAnalysis = sentimentAnalysis
+		sentimentAnalysis, err := FetchExternalSentimentAnalysis(pair.CommunityID)
+		if err != nil {
+			log.Printf("[%s] Claude analysis failed: %v", pair.Symbol, err)
+			if state.LastSentimentAnalysis.Confidence != 0 {
+				sentiment = state.LastSentimentAnalysis
+			}
+		} else {
+			log.Printf("[%s] Sentiment: %d/10, Trend: %s", pair.Symbol, sentimentAnalysis.OverallSentiment, sentimentAnalysis.SentimentTrend)
+			sentiment = sentimentAnalysis
+			state.LastSentimentAnalysis = sentimentAnalysis
+			state.LastSentimentFetchTime = time.Now()
+		}
 	}
 
-	//fud ATTAck
-	fudAttack, err := FetchExternalFudAttackAnalysis(pair.CommunityID)
-	if err != nil {
-		log.Printf("[%s] FUD attack analysis failed: %v", pair.Symbol, err)
+	fudAttack := ClaudeFudAttackResponse{}
+	if time.Since(state.LastFudAttackFetchTime) < 20*time.Minute && state.LastFudAttack.Confidence != 0 {
+		fudAttack = state.LastFudAttack
+		log.Printf("[%s] Using cached FUD attack (last fetch: %v ago)", pair.Symbol, time.Since(state.LastFudAttackFetchTime).Round(time.Second))
 	} else {
-		lastFudAttack = fudAttack
-
-		if err := SaveFudAttack(fudAttack, pair.Symbol, state.PositionUUID); err != nil {
-			log.Printf("[%s] Failed to save FUD attack to database: %v", pair.Symbol, err)
+		fudAttackResp, err := FetchExternalFudAttackAnalysis(pair.CommunityID)
+		if err != nil {
+			log.Printf("[%s] FUD attack analysis failed: %v", pair.Symbol, err)
+			if state.LastFudAttack.Confidence != 0 {
+				fudAttack = state.LastFudAttack
+			}
 		} else {
-			log.Printf("[%s] FUD attack analysis saved to database", pair.Symbol)
-		}
+			fudAttack = fudAttackResp
+			state.LastFudAttack = fudAttackResp
+			state.LastFudAttackFetchTime = time.Now()
 
+			if err := SaveFudAttack(fudAttack, pair.Symbol, state.PositionUUID); err != nil {
+				log.Printf("[%s] Failed to save FUD attack to database: %v", pair.Symbol, err)
+			} else {
+				log.Printf("[%s] FUD attack analysis saved to database", pair.Symbol)
+			}
+		}
+	}
+
+	if fudAttack.Confidence != 0 {
+		lastFudAttack = fudAttack
 		log.Printf("\n[%s] ===== FUD ATTACK ANALYSIS =====", pair.Symbol)
 		if fudAttack.HasAttack {
 			log.Printf("[%s] ⚠️  COORDINATED FUD ATTACK DETECTED!", pair.Symbol)
@@ -237,7 +255,6 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 			log.Printf("[%s]   Confidence: %.0f%%", pair.Symbol, fudAttack.Confidence*100)
 			log.Printf("[%s]   %s", pair.Symbol, fudAttack.Justification)
 		}
-		log.Printf("[%s] ================================\n", pair.Symbol)
 	}
 	state.LastFudCheckTime = now
 

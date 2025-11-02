@@ -110,20 +110,23 @@ type TradingPair struct {
 }
 
 type TradingState struct {
-	CurrentPosition       PositionSide
-	OpenedAt              time.Time
-	OpenReason            string
-	PositionUUID          string
-	LastSentimentAnalysis ClaudeSentimentResponse
-	LastAnalyzedTweetID   string
-	LastFudCheckTime      time.Time
-	LastFudCheckTweetID   string
-	LastDecisionHash      string
-	FudAttackMode         bool
-	FudAttackStartTime    time.Time
-	FudAttackShortStarted bool
-	LastAIRejectionTime   time.Time
-	LastRejectedDecision  string
+	CurrentPosition        PositionSide
+	OpenedAt               time.Time
+	OpenReason             string
+	PositionUUID           string
+	LastSentimentAnalysis  ClaudeSentimentResponse
+	LastSentimentFetchTime time.Time
+	LastFudAttack          ClaudeFudAttackResponse
+	LastFudAttackFetchTime time.Time
+	LastAnalyzedTweetID    string
+	LastFudCheckTime       time.Time
+	LastFudCheckTweetID    string
+	LastDecisionHash       string
+	FudAttackMode          bool
+	FudAttackStartTime     time.Time
+	FudAttackShortStarted  bool
+	LastAIRejectionTime    time.Time
+	LastRejectedDecision   string
 }
 
 type CommunityTweet struct {
