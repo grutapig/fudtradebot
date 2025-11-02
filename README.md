@@ -1,4 +1,4 @@
-# FUD Trade Bot
+# GRUTA AI trading bot dashboard
 
 Automated trading bot for cryptocurrency futures markets that tests correlation between community sentiment and price movement. Built in 12 days as a proof of concept.
 
