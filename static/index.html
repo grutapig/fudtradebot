@@ -651,6 +651,21 @@
             </div>
 
             <div class="chart-container">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 40px; margin-bottom: 30px; padding: 25px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.3);">
+                    <div style="text-align: center;">
+                        <div style="color: #888; font-size: 0.9em; margin-bottom: 8px;">Current Balance</div>
+                        <div style="font-size: 2.5em; font-weight: bold; color: #ffffff; text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);">
+                            ${{ currentBalance.toFixed(2) }}
+                        </div>
+                        <div style="color: #888; font-size: 0.8em; margin-top: 5px;">Initial: ${{ initialBalance.toFixed(2) }}</div>
+                        <div :class="(currentBalance - initialBalance) >= 0 ? 'result-positive' : 'result-negative'" style="font-size: 1.2em; font-weight: bold; margin-top: 5px;">
+                            {{ (currentBalance - initialBalance) >= 0 ? '+' : '' }}${{ (currentBalance - initialBalance).toFixed(2) }}
+                            <span style="font-size: 0.8em; opacity: 0.8;">
+                                ({{ ((currentBalance - initialBalance) / initialBalance * 100).toFixed(2) }}%)
+                            </span>
+                        </div>
+                    </div>
+                </div>
                 <div class="chart-title">Cumulative P/L History</div>
                 <div v-if="loadingPnl" class="loading">⚡ Loading...</div>
                 <div v-show="!loadingPnl">
@@ -716,7 +731,7 @@
                             </span>
                         </span>
                     </div>
-                    <div class="positions-container">
+                    <div class="positions-container" @scroll="handlePositionsScroll">
                         <div v-for="position in positions" :key="position.uuid" 
                              class="position-card"
                              :class="getPnLBorderClass(position)"
@@ -1410,7 +1425,12 @@
                     visibleDecisionsCount: 20,
                     visibleAIValidationsCount: 20,
                     visibleAICloseAnalysesCount: 20,
-                    positionAICloseAnalyses: []
+                    positionAICloseAnalyses: [],
+                    loadingMoreAICloseAnalyses: false,
+                    loadingMorePositions: false,
+                    loadingMoreDecisions: false,
+                    currentBalance: 75.0,
+                    initialBalance: 75.0
                 }
             },
             computed: {
@@ -1420,11 +1440,21 @@
             },
             methods: {
                 async fetchData() {
+                    this.fetchBalance();
                     this.fetchPnLHistory();
                     this.fetchPositions();
                     this.fetchDecisions();
                     this.fetchAIValidations();
                     this.fetchAICloseAnalyses();
+                },
+                async fetchBalance() {
+                    try {
+                        const balanceRes = await fetch('/api/balance');
+                        const balanceData = await balanceRes.json();
+                        this.currentBalance = balanceData.balance || 75.0;
+                    } catch (err) {
+                        console.error('Failed to fetch balance:', err);
+                    }
                 },
                 async fetchPnLHistory() {
                     try {
@@ -1440,7 +1470,7 @@
                 },
                 async fetchPositions() {
                     try {
-                        const positionsRes = await fetch('/api/positions');
+                        const positionsRes = await fetch('/api/positions?limit=50&offset=0');
                         const positionsData = await positionsRes.json();
                         this.positions = positionsData.positions || [];
                         this.positionsSummary = {
@@ -1464,7 +1494,7 @@
                 },
                 async fetchDecisions() {
                     try {
-                        const decisionsRes = await fetch('/api/decisions');
+                        const decisionsRes = await fetch('/api/decisions?limit=100&offset=0');
                         const decisionsData = await decisionsRes.json();
                         this.decisions = decisionsData.decisions || {};
                     } catch (err) {
@@ -1486,7 +1516,7 @@
                 },
                 async fetchAICloseAnalyses() {
                     try {
-                        const aiCloseAnalysesRes = await fetch('/api/ai-close-analyses');
+                        const aiCloseAnalysesRes = await fetch('/api/ai-close-analyses?limit=20&offset=0');
                         const aiCloseAnalysesData = await aiCloseAnalysesRes.json();
                         this.aiCloseAnalyses = aiCloseAnalysesData.ai_close_analyses || [];
                     } catch (err) {
@@ -1736,11 +1766,43 @@
                         this.snapshotsChart = null;
                     }
                 },
-                handleDecisionScroll(event) {
+                async handleDecisionScroll(event) {
                     const container = event.target;
                     const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-                    if (scrollBottom < 100) {
-                        this.visibleDecisionsCount += 20;
+                    if (scrollBottom < 100 && !this.loadingMoreDecisions) {
+                        this.loadingMoreDecisions = true;
+                        try {
+                            const currentCount = Object.values(this.decisions).reduce((sum, arr) => sum + arr.length, 0);
+                            const res = await fetch(`/api/decisions?limit=100&offset=${currentCount}`);
+                            const data = await res.json();
+                            const newDecisions = data.decisions || {};
+                            
+                            const existingIds = new Set();
+                            for (const symbol in this.decisions) {
+                                this.decisions[symbol].forEach(d => existingIds.add(d.id));
+                            }
+                            
+                            let hasNewData = false;
+                            for (const symbol in newDecisions) {
+                                const uniqueDecisions = newDecisions[symbol].filter(d => !existingIds.has(d.id));
+                                if (uniqueDecisions.length > 0) {
+                                    hasNewData = true;
+                                    if (this.decisions[symbol]) {
+                                        this.decisions[symbol].push(...uniqueDecisions);
+                                    } else {
+                                        this.decisions[symbol] = uniqueDecisions;
+                                    }
+                                }
+                            }
+                            
+                            if (hasNewData) {
+                                this.visibleDecisionsCount += 20;
+                            }
+                        } catch (err) {
+                            console.error('Failed to load more decisions:', err);
+                        } finally {
+                            this.loadingMoreDecisions = false;
+                        }
                     }
                 },
                 getVisibleDecisions(decisions) {
@@ -1756,15 +1818,62 @@
                 getVisibleAIValidations(validations) {
                     return validations.slice(0, Math.min(this.visibleAIValidationsCount, validations.length));
                 },
-                handleAICloseAnalysesScroll(event) {
+                async handleAICloseAnalysesScroll(event) {
                     const container = event.target;
                     const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-                    if (scrollBottom < 100) {
-                        this.visibleAICloseAnalysesCount += 20;
+                    if (scrollBottom < 100 && !this.loadingMoreAICloseAnalyses) {
+                        this.loadingMoreAICloseAnalyses = true;
+                        try {
+                            const offset = this.aiCloseAnalyses.length;
+                            const res = await fetch(`/api/ai-close-analyses?limit=20&offset=${offset}`);
+                            const data = await res.json();
+                            const newAnalyses = data.ai_close_analyses || [];
+                            if (newAnalyses.length > 0) {
+                                const existingIds = new Set(this.aiCloseAnalyses.map(a => a.id));
+                                const uniqueAnalyses = newAnalyses.filter(a => !existingIds.has(a.id));
+                                if (uniqueAnalyses.length > 0) {
+                                    this.aiCloseAnalyses.push(...uniqueAnalyses);
+                                    this.visibleAICloseAnalysesCount += uniqueAnalyses.length;
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Failed to load more AI close analyses:', err);
+                        } finally {
+                            this.loadingMoreAICloseAnalyses = false;
+                        }
                     }
                 },
                 getVisibleAICloseAnalyses(analyses) {
                     return analyses.slice(0, Math.min(this.visibleAICloseAnalysesCount, analyses.length));
+                },
+                async handlePositionsScroll(event) {
+                    const container = event.target;
+                    const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+                    if (scrollBottom < 100 && !this.loadingMorePositions) {
+                        this.loadingMorePositions = true;
+                        try {
+                            const openPositionsCount = this.positions.filter(p => !p.is_closed).length;
+                            const closedPositionsCount = this.positions.filter(p => p.is_closed).length;
+                            
+                            const res = await fetch(`/api/positions?limit=50&offset=${closedPositionsCount}`);
+                            const data = await res.json();
+                            const allPositions = data.positions || [];
+                            
+                            const newClosedPositions = allPositions.filter(p => p.is_closed);
+                            
+                            if (newClosedPositions.length > 0) {
+                                const existingUUIDs = new Set(this.positions.map(p => p.uuid));
+                                const uniqueNewPositions = newClosedPositions.filter(p => !existingUUIDs.has(p.uuid));
+                                if (uniqueNewPositions.length > 0) {
+                                    this.positions.push(...uniqueNewPositions);
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Failed to load more positions:', err);
+                        } finally {
+                            this.loadingMorePositions = false;
+                        }
+                    }
                 },
                 renderSnapshotsChart() {
                     const ctx = document.getElementById('snapshotsChart');

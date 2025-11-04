@@ -18,3 +18,4 @@ const (
 )
 const KLINES_INTERVAL = "1h"
 const KLINES_BTC_INTERVAL = "4h"
+const INITIAL_BALANCE = 75.0

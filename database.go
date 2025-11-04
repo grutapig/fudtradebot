@@ -287,6 +287,17 @@ func GetRecentDecisions(hoursBack int) ([]TradingDecisionRecord, error) {
 	return decisions, err
 }
 
+func GetRecentDecisionsWithPagination(limit int, offset int) ([]TradingDecisionRecord, error) {
+	var decisions []TradingDecisionRecord
+
+	err := DB.Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&decisions).Error
+
+	return decisions, err
+}
+
 func GetDecisionByID(id uint) (*TradingDecisionRecord, error) {
 	var decision TradingDecisionRecord
 
@@ -500,6 +511,16 @@ func GetClosedPositions(hoursBack int) ([]PositionRecord, error) {
 	return positions, err
 }
 
+func GetClosedPositionsWithPagination(limit int, offset int) ([]PositionRecord, error) {
+	var positions []PositionRecord
+	err := DB.Where("is_closed = ?", true).
+		Order("closed_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&positions).Error
+	return positions, err
+}
+
 func GetAllClosedPositionsOrdered() ([]PositionRecord, error) {
 	var positions []PositionRecord
 	err := DB.Where("is_closed = ?", true).
@@ -639,6 +660,15 @@ func GetAIPositionCloses() ([]AiPositionCloseRecord, error) {
 	return records, err
 }
 
+func GetAIPositionClosesWithPagination(limit int, offset int) ([]AiPositionCloseRecord, error) {
+	var records []AiPositionCloseRecord
+	err := DB.Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&records).Error
+	return records, err
+}
+
 func GetAIPositionCloseByID(id uint) (*AiPositionCloseRecord, error) {
 	var record AiPositionCloseRecord
 	err := DB.Where("id = ?", id).First(&record).Error
@@ -654,4 +684,18 @@ func CountPositionSnapshots(positionUUID string) (int64, error) {
 		Where("position_uuid = ?", positionUUID).
 		Count(&count).Error
 	return count, err
+}
+
+func CalculateCurrentBalance() (float64, error) {
+	var totalPnL float64
+	err := DB.Model(&PositionRecord{}).
+		Where("is_closed = ?", true).
+		Select("COALESCE(SUM(current_pn_l), 0)").
+		Scan(&totalPnL).Error
+
+	if err != nil {
+		return 0, err
+	}
+
+	return INITIAL_BALANCE + totalPnL, nil
 }

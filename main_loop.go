@@ -184,7 +184,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	log.Printf("[%s] FUD activity trend: %v", pair.Symbol, fudActivityAnalysis.Trend)
 
 	sentiment := ClaudeSentimentResponse{}
-	if time.Since(state.LastSentimentFetchTime) < 20*time.Minute && state.LastSentimentAnalysis.Confidence != 0 {
+	if time.Since(state.LastSentimentFetchTime) < 2*time.Hour && state.LastSentimentAnalysis.Confidence != 0 {
 		sentiment = state.LastSentimentAnalysis
 		log.Printf("[%s] Using cached sentiment (last fetch: %v ago)", pair.Symbol, time.Since(state.LastSentimentFetchTime).Round(time.Second))
 	} else {
@@ -203,7 +203,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	}
 
 	fudAttack := ClaudeFudAttackResponse{}
-	if time.Since(state.LastFudAttackFetchTime) < 20*time.Minute && state.LastFudAttack.Confidence != 0 {
+	if time.Since(state.LastFudAttackFetchTime) < 2*time.Hour && state.LastFudAttack.Confidence != 0 {
 		fudAttack = state.LastFudAttack
 		log.Printf("[%s] Using cached FUD attack (last fetch: %v ago)", pair.Symbol, time.Since(state.LastFudAttackFetchTime).Round(time.Second))
 	} else {
@@ -386,6 +386,57 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 
 	//close position
 	if state.CurrentPosition != PositionSideBoth {
+		currentPosition, _ := exchange.GetPosition(pair.Symbol)
+		currentPnL := 0.0
+		if currentPosition != nil {
+			currentPnL = currentPosition.UnrealizedPL
+		}
+
+		snapshots, _ := GetPositionSnapshots(state.PositionUUID)
+		maSignal := CalculateMovingAveragePnLSignal(snapshots, currentPnL)
+
+		log.Printf("[%s] MA Signal: ShouldClose=%v, Current PnL=$%.2f, MA=$%.2f, Threshold=$%.2f",
+			pair.Symbol, maSignal.ShouldClose, maSignal.CurrentPnL, maSignal.MovingAverage, maSignal.Threshold)
+		log.Printf("[%s] MA Reason: %s", pair.Symbol, maSignal.TriggerReason)
+
+		if maSignal.ShouldClose {
+			log.Printf("[%s] 🚨 MOVING AVERAGE EXIT SIGNAL - Force closing position!", pair.Symbol)
+
+			var closedPosition *Position
+			if state.CurrentPosition == PositionSideLong {
+				if err := exchange.ClosePosition(pair.Symbol, PositionSideLong); err != nil {
+					log.Printf("[%s] Failed to close LONG: %v", pair.Symbol, err)
+					return err
+				}
+				closedPosition, _ = exchange.GetPosition(pair.Symbol)
+			} else if state.CurrentPosition == PositionSideShort {
+				if err := exchange.ClosePosition(pair.Symbol, PositionSideShort); err != nil {
+					log.Printf("[%s] Failed to close SHORT: %v", pair.Symbol, err)
+					return err
+				}
+				closedPosition, _ = exchange.GetPosition(pair.Symbol)
+			}
+
+			if state.PositionUUID != "" {
+				markPrice, _ := exchange.GetMarkPrice(pair.Symbol)
+				realizedPL := 0.0
+				if closedPosition != nil {
+					realizedPL = closedPosition.UnrealizedPL
+				}
+				if err := UpdatePositionClose(state.PositionUUID, markPrice, realizedPL, "moving_average_exit"); err != nil {
+					log.Printf("[%s] Failed to update position close: %v", pair.Symbol, err)
+				} else {
+					log.Printf("[%s] Position close recorded in database (MA exit)", pair.Symbol)
+				}
+			}
+
+			state.CurrentPosition = PositionSideBoth
+			state.PositionUUID = ""
+			state.OpenReason = ""
+			log.Printf("[%s] Position closed by Moving Average exit signal", pair.Symbol)
+			return nil
+		}
+
 		shouldClose := ShouldClosePosition(state.CurrentPosition, coinIchimoku)
 		if shouldClose && savedDecision != nil {
 			shouldClose, err := performAICloseAnalysis(claudeClient, exchange, activityClient, pair, state)
@@ -640,7 +691,14 @@ func performAICloseAnalysis(claudeClient *claude.ClaudeApi, exchange AsterDexExc
 
 	log.Printf("[%s] AI Close Analysis: Analyzing %d snapshots, %d tweets", pair.Symbol, len(snapshots), len(recentTweets))
 
-	closeResponse, err := AnalyzePositionClose(*claudeClient, positionRecord, snapshots, recentTweets, btcIchimoku.Analysis, coinIchimoku.Analysis, shouldCloseByIchimoku)
+	currentPosition, _ := exchange.GetPosition(pair.Symbol)
+	currentPnL := 0.0
+	if currentPosition != nil {
+		currentPnL = currentPosition.UnrealizedPL
+	}
+	maSignal := CalculateMovingAveragePnLSignal(snapshots, currentPnL)
+
+	closeResponse, err := AnalyzePositionClose(*claudeClient, positionRecord, snapshots, recentTweets, btcIchimoku.Analysis, coinIchimoku.Analysis, shouldCloseByIchimoku, maSignal)
 	if err != nil {
 		return false, fmt.Errorf("AI close analysis failed: %w", err)
 	}

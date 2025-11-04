@@ -182,3 +182,13 @@ type ClaudePositionCloseResponse struct {
 	ExpectedPnL       float64 `json:"expected_pnl"`
 	RiskAssessment    string  `json:"risk_assessment"`
 }
+
+type MovingAveragePnLSignal struct {
+	ShouldClose    bool    `json:"should_close"`
+	CurrentPnL     float64 `json:"current_pnl"`
+	MovingAverage  float64 `json:"moving_average"`
+	Threshold      float64 `json:"threshold"`
+	SnapshotsCount int     `json:"snapshots_count"`
+	PercentBelowMA float64 `json:"percent_below_ma"`
+	TriggerReason  string  `json:"trigger_reason"`
+}

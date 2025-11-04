@@ -26,6 +26,8 @@ func handleAPIRoutes(w http.ResponseWriter, r *http.Request) {
 		handlePairs(w, r)
 	case strings.HasPrefix(path, "/balance-history"):
 		handleBalanceHistory(w, r)
+	case strings.HasPrefix(path, "/balance"):
+		handleBalance(w, r)
 	case strings.HasPrefix(path, "/assets"):
 		handleAssets(w, r)
 	case strings.HasPrefix(path, "/decisions"):
@@ -108,6 +110,29 @@ func UpdateTradingState(symbol string, state *TradingState) {
 	statesMutex.Lock()
 	defer statesMutex.Unlock()
 	tradingStates[symbol] = state
+}
+
+func handleBalance(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	balance, err := CalculateCurrentBalance()
+	if err != nil {
+		http.Error(w, "Failed to calculate balance", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"balance": balance,
+	})
 }
 
 func handleBalanceHistory(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +218,20 @@ func handleDecisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	decisions, err := GetRecentDecisions(168)
+	limit := 100
+	offset := 0
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	decisions, err := GetRecentDecisionsWithPagination(limit, offset)
 	if err != nil {
 		http.Error(w, "Failed to get decisions", http.StatusInternalServerError)
 		return
@@ -379,13 +417,26 @@ func handlePositions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	limit := 100
+	offset := 0
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
 	openPositions, err := GetOpenPositions()
 	if err != nil {
 		http.Error(w, "Failed to get open positions", http.StatusInternalServerError)
 		return
 	}
 
-	closedPositions, err := GetClosedPositions(168)
+	closedPositions, err := GetClosedPositionsWithPagination(limit, offset)
 	if err != nil {
 		http.Error(w, "Failed to get closed positions", http.StatusInternalServerError)
 		return
@@ -677,8 +728,22 @@ func handlePnLHistory(w http.ResponseWriter, r *http.Request) {
 		CumulativePnL float64 `json:"cumulative_pnl"`
 	}
 
-	cumulative := 50.0
 	result := make([]PnLPoint, 0)
+
+	baseDate := time.Date(2024, 11, 3, 0, 0, 0, 0, time.UTC)
+	for i := 6; i >= 0; i-- {
+		dayTime := baseDate.AddDate(0, 0, -i)
+		for hour := 0; hour < 24; hour++ {
+			timestamp := dayTime.Add(time.Duration(hour) * time.Hour).Format(time.RFC3339)
+			result = append(result, PnLPoint{
+				Timestamp:     timestamp,
+				PnL:           0,
+				CumulativePnL: INITIAL_BALANCE,
+			})
+		}
+	}
+
+	cumulative := INITIAL_BALANCE
 	for _, key := range keys {
 		cumulative += hourlyMap[key]
 		result = append(result, PnLPoint{
@@ -861,7 +926,20 @@ func handleAICloseAnalyses(w http.ResponseWriter, r *http.Request) {
 			analyses = []AiPositionCloseRecord{}
 		}
 	} else {
-		analyses, err = GetAIPositionCloses()
+		limit := 20
+		offset := 0
+		if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+			if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+				limit = parsedLimit
+			}
+		}
+		if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+			if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+				offset = parsedOffset
+			}
+		}
+
+		analyses, err = GetAIPositionClosesWithPagination(limit, offset)
 		if err != nil {
 			log.Printf("Failed to get AI close analyses: %s", err)
 			http.Error(w, "Failed to get AI close analyses", http.StatusMethodNotAllowed)
