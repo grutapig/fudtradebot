@@ -138,7 +138,7 @@ func TestAsterDexExchange_ClosePosition(t *testing.T) {
 func TestAsterDexExchange_GetKlines(t *testing.T) {
 	godotenv.Load()
 	exchange := NewAsterDexExchange(os.Getenv(ENV_DEX_KEY), os.Getenv(ENV_DEX_SECRET))
-	result, err := exchange.Klines("TURTLEUSDT", "1h", time.Now().AddDate(0, -5, 0).UnixMilli(), time.Now().UnixMilli(), 500)
+	result, err := exchange.Klines("BTCUSDT", "4h", 0, 0, 200)
 	assert.NoError(t, err)
 	svg := GenerateCandlestickSVG(result, 800, 600)
 	os.WriteFile("chart.svg", []byte(svg), 0655)

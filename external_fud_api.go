@@ -27,9 +27,21 @@ func FetchExternalFudAttackAnalysis(communityID string) (ClaudeFudAttackResponse
 		Timeout: 120 * time.Second,
 	}
 
-	resp, err := client.Get(fullURL)
+	var resp *http.Response
+	var err error
+
+	for attempt := 0; attempt < 2; attempt++ {
+		resp, err = client.Get(fullURL)
+		if err == nil {
+			break
+		}
+		if attempt == 0 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
 	if err != nil {
-		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to fetch FUD attack analysis: %w", err)
+		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to fetch FUD attack analysis after 2 attempts: %w", err)
 	}
 	defer resp.Body.Close()
 
