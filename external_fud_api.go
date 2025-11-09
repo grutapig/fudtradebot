@@ -32,7 +32,7 @@ func FetchExternalFudAttackAnalysis(communityID string) (ClaudeFudAttackResponse
 
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, err = client.Get(fullURL)
-		if err == nil {
+		if err == nil && resp.StatusCode == 200 {
 			break
 		}
 		if attempt == 0 {
@@ -56,8 +56,8 @@ func FetchExternalFudAttackAnalysis(communityID string) (ClaudeFudAttackResponse
 			Confidence:    0.0,
 			MessageCount:  0,
 			Participants:  []FudAttackParticipant{},
-			Justification: fmt.Sprintf("FUD API error (status %d): external service unavailable", resp.StatusCode),
-		}, nil
+			Justification: fmt.Sprintf("FUD API error (status %d): external service unavailable, raw: %s", resp.StatusCode, string(body)),
+		}, fmt.Errorf("FUD API error (status %d): external service unavailable, raw: %s", resp.StatusCode, string(body))
 	}
 
 	var fudResponse ClaudeFudAttackResponse
@@ -68,7 +68,7 @@ func FetchExternalFudAttackAnalysis(communityID string) (ClaudeFudAttackResponse
 			MessageCount:  0,
 			Participants:  []FudAttackParticipant{},
 			Justification: fmt.Sprintf("FUD API parse error: %v", err),
-		}, nil
+		}, fmt.Errorf("FUD API parse error: %v", err)
 	}
 
 	return fudResponse, nil

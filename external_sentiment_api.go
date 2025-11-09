@@ -32,11 +32,11 @@ func FetchExternalSentimentAnalysis(communityID string) (ClaudeSentimentResponse
 
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, err = client.Get(fullURL)
-		if err == nil {
+		if err == nil && resp.StatusCode == 200 {
 			break
 		}
 		if attempt == 0 {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(2500 * time.Millisecond)
 		}
 	}
 
@@ -56,8 +56,8 @@ func FetchExternalSentimentAnalysis(communityID string) (ClaudeSentimentResponse
 			SentimentTrend:   "neutral",
 			Confidence:       0.0,
 			KeyThemes:        []string{},
-			Recommendation:   fmt.Sprintf("Sentiment API error (status %d): external service unavailable", resp.StatusCode),
-		}, nil
+			Recommendation:   fmt.Sprintf("Sentiment API error (status %d): external service unavailable, raw: %s", resp.StatusCode, string(body)),
+		}, fmt.Errorf("sentiment API error (status %d), raw: %s", resp.StatusCode, string(body))
 	}
 
 	var sentimentResponse ClaudeSentimentResponse
@@ -68,7 +68,7 @@ func FetchExternalSentimentAnalysis(communityID string) (ClaudeSentimentResponse
 			Confidence:       0.0,
 			KeyThemes:        []string{},
 			Recommendation:   fmt.Sprintf("Sentiment API parse error: %v", err),
-		}, nil
+		}, fmt.Errorf("sentiment API parse error: %s, raw: %s", err, string(body))
 	}
 
 	return sentimentResponse, nil
