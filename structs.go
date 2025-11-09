@@ -165,7 +165,7 @@ type ClaudeFudAttackResponse struct {
 	FudType         string                 `json:"fud_type"`
 	Theme           string                 `json:"theme"`
 	StartedHoursAgo int                    `json:"started_hours_ago"`
-	LastAttackTime  time.Time              `json:"last_attack_time"`
+	LastAttackTime  *time.Time             `json:"last_attack_time,omitempty"`
 	Justification   string                 `json:"justification"`
 }
 

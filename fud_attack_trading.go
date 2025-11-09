@@ -19,7 +19,12 @@ func processFudAttackTradingCycle(
 
 	log.Printf("[%s] === FUD ATTACK MODE ACTIVE ===", pair.Symbol)
 
-	timeSinceAttack := time.Since(lastFudAttack.LastAttackTime)
+	if lastFudAttack.LastAttackTime == nil {
+		log.Printf("[%s] FUD attack has no timestamp, skipping FUD mode", pair.Symbol)
+		return false, nil
+	}
+
+	timeSinceAttack := time.Since(*lastFudAttack.LastAttackTime)
 
 	if timeSinceAttack > 12*time.Hour {
 		log.Printf("[%s] More than 12 hours since FUD attack, checking exit conditions...", pair.Symbol)

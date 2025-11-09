@@ -184,7 +184,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	log.Printf("[%s] FUD activity trend: %v", pair.Symbol, fudActivityAnalysis.Trend)
 
 	sentiment := ClaudeSentimentResponse{}
-	if time.Since(state.LastSentimentFetchTime) < 2*time.Hour && state.LastSentimentAnalysis.Confidence != 0 {
+	if time.Since(state.LastSentimentFetchTime) < 30*time.Minute && state.LastSentimentAnalysis.Confidence != 0 {
 		sentiment = state.LastSentimentAnalysis
 		log.Printf("[%s] Using cached sentiment (last fetch: %v ago)", pair.Symbol, time.Since(state.LastSentimentFetchTime).Round(time.Second))
 	} else {
@@ -203,7 +203,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 	}
 
 	fudAttack := ClaudeFudAttackResponse{}
-	if time.Since(state.LastFudAttackFetchTime) < 2*time.Hour && state.LastFudAttack.Confidence != 0 {
+	if time.Since(state.LastFudAttackFetchTime) < 30*time.Minute && state.LastFudAttack.Confidence != 0 {
 		fudAttack = state.LastFudAttack
 		log.Printf("[%s] Using cached FUD attack (last fetch: %v ago)", pair.Symbol, time.Since(state.LastFudAttackFetchTime).Round(time.Second))
 	} else {
@@ -236,19 +236,23 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 			log.Printf("[%s]   FUD Type: %s", pair.Symbol, fudAttack.FudType)
 			log.Printf("[%s]   Theme: %s", pair.Symbol, fudAttack.Theme)
 			log.Printf("[%s]   Started: %d hours ago", pair.Symbol, fudAttack.StartedHoursAgo)
-			log.Printf("[%s]   Last Attack Time: %s", pair.Symbol, fudAttack.LastAttackTime.Format("2006-01-02 15:04:05"))
+			if fudAttack.LastAttackTime != nil {
+				log.Printf("[%s]   Last Attack Time: %s", pair.Symbol, fudAttack.LastAttackTime.Format("2006-01-02 15:04:05"))
+			}
 			log.Printf("[%s]   Participants:", pair.Symbol)
 			for _, p := range fudAttack.Participants {
 				log.Printf("[%s]     - %s (%d messages)", pair.Symbol, p.Username, p.MessageCount)
 			}
 			log.Printf("[%s]   Justification: %s", pair.Symbol, fudAttack.Justification)
 
-			timeSinceAttack := time.Since(fudAttack.LastAttackTime)
-			if timeSinceAttack <= 1*time.Hour && !state.FudAttackMode {
-				log.Printf("[%s] 🚨 ACTIVATING FUD ATTACK TRADING MODE (attack is fresh: %.0f min ago)", pair.Symbol, timeSinceAttack.Minutes())
-				state.FudAttackMode = true
-				state.FudAttackStartTime = fudAttack.LastAttackTime
-				state.FudAttackShortStarted = false
+			if fudAttack.LastAttackTime != nil {
+				timeSinceAttack := time.Since(*fudAttack.LastAttackTime)
+				if timeSinceAttack <= 1*time.Hour && !state.FudAttackMode {
+					log.Printf("[%s] 🚨 ACTIVATING FUD ATTACK TRADING MODE (attack is fresh: %.0f min ago)", pair.Symbol, timeSinceAttack.Minutes())
+					state.FudAttackMode = true
+					state.FudAttackStartTime = *fudAttack.LastAttackTime
+					state.FudAttackShortStarted = false
+				}
 			}
 		} else {
 			log.Printf("[%s] ✓ No coordinated FUD attack detected", pair.Symbol)
@@ -392,7 +396,7 @@ func processTradingCycle(exchange AsterDexExchange, activityClient ExternalActiv
 			currentPnL = currentPosition.UnrealizedPL
 		}
 
-		snapshots, _ := GetPositionSnapshots(state.PositionUUID)
+		snapshots, _ := GetPositionSnapshotsByUUID(state.PositionUUID)
 		maSignal := CalculateMovingAveragePnLSignal(snapshots, currentPnL)
 
 		log.Printf("[%s] MA Signal: ShouldClose=%v, Current PnL=$%.2f, MA=$%.2f, Threshold=$%.2f",

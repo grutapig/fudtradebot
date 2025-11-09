@@ -33,19 +33,30 @@ func FetchExternalSentimentAnalysis(communityID string) (ClaudeSentimentResponse
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return ClaudeSentimentResponse{}, fmt.Errorf("sentiment API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return ClaudeSentimentResponse{}, fmt.Errorf("failed to read response body: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return ClaudeSentimentResponse{
+			OverallSentiment: 5,
+			SentimentTrend:   "neutral",
+			Confidence:       0.0,
+			KeyThemes:        []string{},
+			Recommendation:   fmt.Sprintf("Sentiment API error (status %d): external service unavailable", resp.StatusCode),
+		}, nil
+	}
+
 	var sentimentResponse ClaudeSentimentResponse
 	if err := json.Unmarshal(body, &sentimentResponse); err != nil {
-		return ClaudeSentimentResponse{}, fmt.Errorf("failed to parse sentiment response: %w", err)
+		return ClaudeSentimentResponse{
+			OverallSentiment: 5,
+			SentimentTrend:   "neutral",
+			Confidence:       0.0,
+			KeyThemes:        []string{},
+			Recommendation:   fmt.Sprintf("Sentiment API parse error: %v", err),
+		}, nil
 	}
 
 	return sentimentResponse, nil

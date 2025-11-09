@@ -652,22 +652,27 @@ func handleFudAttacks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type FudAttackItem struct {
-		ID              uint      `json:"id"`
-		Symbol          string    `json:"symbol"`
-		HasAttack       bool      `json:"has_attack"`
-		Confidence      float64   `json:"confidence"`
-		MessageCount    int       `json:"message_count"`
-		FudType         string    `json:"fud_type"`
-		Theme           string    `json:"theme"`
-		StartedHoursAgo int       `json:"started_hours_ago"`
-		LastAttackTime  time.Time `json:"last_attack_time"`
-		Justification   string    `json:"justification"`
-		Participants    string    `json:"participants"`
-		CreatedAt       time.Time `json:"created_at"`
+		ID              uint       `json:"id"`
+		Symbol          string     `json:"symbol"`
+		HasAttack       bool       `json:"has_attack"`
+		Confidence      float64    `json:"confidence"`
+		MessageCount    int        `json:"message_count"`
+		FudType         string     `json:"fud_type"`
+		Theme           string     `json:"theme"`
+		StartedHoursAgo int        `json:"started_hours_ago"`
+		LastAttackTime  *time.Time `json:"last_attack_time,omitempty"`
+		Justification   string     `json:"justification"`
+		Participants    string     `json:"participants"`
+		CreatedAt       time.Time  `json:"created_at"`
 	}
 
 	attackItems := make([]FudAttackItem, len(attacks))
 	for i, a := range attacks {
+		var lastAttackTime *time.Time
+		if !a.LastAttackTime.IsZero() {
+			lastAttackTime = &a.LastAttackTime
+		}
+
 		attackItems[i] = FudAttackItem{
 			ID:              a.ID,
 			Symbol:          a.Symbol,
@@ -677,7 +682,7 @@ func handleFudAttacks(w http.ResponseWriter, r *http.Request) {
 			FudType:         a.FudType,
 			Theme:           a.Theme,
 			StartedHoursAgo: a.StartedHoursAgo,
-			LastAttackTime:  a.LastAttackTime,
+			LastAttackTime:  lastAttackTime,
 			Justification:   a.Justification,
 			Participants:    a.Participants,
 			CreatedAt:       a.CreatedAt,

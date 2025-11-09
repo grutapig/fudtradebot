@@ -549,6 +549,11 @@ func SaveFudAttack(attack ClaudeFudAttackResponse, symbol string, positionUUID s
 		}
 	}
 
+	lastAttackTime := time.Time{}
+	if attack.LastAttackTime != nil {
+		lastAttackTime = *attack.LastAttackTime
+	}
+
 	record := FudAttackRecord{
 		PositionUUID:    positionUUID,
 		Symbol:          symbol,
@@ -558,7 +563,7 @@ func SaveFudAttack(attack ClaudeFudAttackResponse, symbol string, positionUUID s
 		FudType:         attack.FudType,
 		Theme:           attack.Theme,
 		StartedHoursAgo: attack.StartedHoursAgo,
-		LastAttackTime:  attack.LastAttackTime,
+		LastAttackTime:  lastAttackTime,
 		Justification:   attack.Justification,
 		Participants:    participantsJSON,
 		CreatedAt:       time.Now(),

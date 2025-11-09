@@ -33,19 +33,30 @@ func FetchExternalFudAttackAnalysis(communityID string) (ClaudeFudAttackResponse
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return ClaudeFudAttackResponse{}, fmt.Errorf("FUD API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to read response body: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return ClaudeFudAttackResponse{
+			HasAttack:     false,
+			Confidence:    0.0,
+			MessageCount:  0,
+			Participants:  []FudAttackParticipant{},
+			Justification: fmt.Sprintf("FUD API error (status %d): external service unavailable", resp.StatusCode),
+		}, nil
+	}
+
 	var fudResponse ClaudeFudAttackResponse
 	if err := json.Unmarshal(body, &fudResponse); err != nil {
-		return ClaudeFudAttackResponse{}, fmt.Errorf("failed to parse FUD response: %w", err)
+		return ClaudeFudAttackResponse{
+			HasAttack:     false,
+			Confidence:    0.0,
+			MessageCount:  0,
+			Participants:  []FudAttackParticipant{},
+			Justification: fmt.Sprintf("FUD API parse error: %v", err),
+		}, nil
 	}
 
 	return fudResponse, nil
